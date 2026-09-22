@@ -134,7 +134,8 @@ const probe = () =>
     title: document.querySelector('.stage-title')?.textContent ?? null,
     rail: document.querySelectorAll('.rail-item').length,
     railCurrent: document.querySelector('.rail-item[aria-current="true"]')?.textContent?.trim() ?? null,
-    hero: getComputedStyle(document.querySelector('.hero')).display !== 'none',
+    scrollY: Math.round(window.scrollY),
+    sheetPosition: (() => { const f = document.querySelector('.focus'); return f ? getComputedStyle(f).position : null; })(),
     wall: getComputedStyle(document.querySelector('.wall')).display !== 'none',
     lightbox: !!document.querySelector('.lightbox'),
     lightboxCount: document.querySelector('.lightbox-bar .mono:nth-child(2)')?.textContent ?? null,
@@ -146,17 +147,22 @@ const probe = () =>
 
 /* 1. initial wall ---------------------------------------------------------- */
 let s = await probe();
-record('首屏是方块墙', s.mode === 'wall' && s.wall && s.hero, `mode=${s.mode}`);
+record('首屏是方块墙', s.mode === 'wall' && s.wall, `mode=${s.mode}`);
 record('16 个方块全部渲染', (await cdp.evaluate('document.querySelectorAll(".tile").length')) === 16);
 
-/* 2. open a block ---------------------------------------------------------- */
+/* 2. open a block from partway down the wall -------------------------------- */
+/* This is where the old page-swap model threw the reader 2700px to the top. */
+await cdp.evaluate(`document.querySelector('.tile[data-open="record-004"]').scrollIntoView({block:'center',behavior:'instant'})`);
+await sleep(500);
+const openedFrom = await cdp.evaluate('Math.round(window.scrollY)');
 await cdp.click('.tile[data-open="record-004"]');
 s = await probe();
-record('点击后进入放大态', s.mode === 'focus' && !s.wall, `mode=${s.mode}`);
+record('点击后进入放大态', s.mode === 'focus', `mode=${s.mode}`);
 record('放大的是被点的那一块', s.title === '建筑模型制作', `title=${s.title}`);
 record('其余块收进左栏且共 16 项', s.rail === 16, `rail=${s.rail}`);
 record('左栏标出当前块', s.railCurrent?.includes('建筑模型制作'), `current=${s.railCurrent}`);
-record('放大态隐藏大标题', s.hero === false);
+record('详情是覆盖层，不是换页', s.sheetPosition === 'fixed', `position=${s.sheetPosition}`);
+record('打开时页面没有被甩走', s.scrollY === openedFrom, `scrollY ${openedFrom} → ${s.scrollY}`);
 record('主图已加载', s.stageImgOk === true);
 record('地址栏写入深链', s.hash === '#/b/record-004', `hash=${s.hash}`);
 record('动画残留已清理', s.fly === 0, `fly=${s.fly}`);
@@ -194,9 +200,28 @@ record('方向键切换上/下一个块', s.title !== before, `${before} → ${s
 /* 6. return to the wall ---------------------------------------------------- */
 await cdp.click('[data-close]');
 s = await probe();
-record('点返回回到方块墙', s.mode === 'wall' && s.wall && s.hero, `mode=${s.mode}`);
+record('点返回回到方块墙', s.mode === 'wall' && s.wall, `mode=${s.mode}`);
 record('返回后清除深链', s.hash === '', `hash=${s.hash}`);
 record('返回后无动画残留', s.fly === 0);
+
+/* 6b. browser Back closes the sheet, not the site -------------------------- */
+await cdp.evaluate(`document.querySelector('.tile[data-open="record-002"]').scrollIntoView({block:'center',behavior:'instant'})`);
+await sleep(500);
+await cdp.click('.tile[data-open="record-002"]');
+await sleep(1300);
+/* Assert the sheet really opened first — otherwise the Back check below would
+   pass vacuously with the wall already showing. */
+const openedAgain = await probe();
+record('再次点开方块', openedAgain.mode === 'focus' && openedAgain.title === '校园数字场景重建', `title=${openedAgain.title}`);
+/* history.length is a poor probe here: the earlier Back left a forward entry,
+   which pushState discards before adding its own, so the total never moves.
+   Assert the entry itself carries our state instead. */
+const entryState = await cdp.evaluate('history.state?.pandaBlock ?? null');
+record('打开方块会写入一条可返回的历史', entryState === 'record-002', `state=${entryState}`);
+await cdp.evaluate('history.back()');
+await sleep(1300);
+s = await probe();
+record('系统返回键收起详情而不是退出网站', s.mode === 'wall', `mode=${s.mode}`);
 
 /* 7. deep link on a fresh load -------------------------------------------- */
 await cdp.send('Page.navigate', { url: `${BASE}#/b/hardware-mr` });
@@ -216,7 +241,36 @@ const latinLeak = await cdp.evaluate(`(() => {
 })()`);
 record('首屏无残留英文文案', latinLeak === '', latinLeak);
 
-/* 9. errors ---------------------------------------------------------------- */
+/* 9. thumb targets on a phone ---------------------------------------------- */
+await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+await cdp.send('Page.navigate', { url: BASE });
+await sleep(2200);
+await cdp.evaluate(`document.querySelector('.tile[data-open="record-001"]').scrollIntoView({block:'center',behavior:'instant'})`);
+await sleep(400);
+await cdp.click('.tile[data-open="record-001"]');
+await sleep(1500);
+const sheetOnPhone = await probe();
+record('手机上详情铺满整屏', sheetOnPhone.sheetPosition === 'fixed' && sheetOnPhone.mode === 'focus');
+const smallTargets = await cdp.evaluate(`(() => {
+  const decorative = /tile-x|tile-plus/;
+  return [...document.querySelectorAll('button, a')]
+    .filter((el) => el.offsetParent !== null)
+    .map((el) => { const r = el.getBoundingClientRect(); return { what: el.className || el.tagName, w: Math.round(r.width), h: Math.round(r.height) }; })
+    .filter((i) => i.h < 44 && !decorative.test(i.what))
+    .map((i) => i.what + ' ' + i.w + 'x' + i.h);
+})()`);
+record('手机端所有可点目标高度 ≥44px', smallTargets.length === 0, smallTargets.slice(0, 5).join(', '));
+const railPeek = await cdp.evaluate(`(() => {
+  const rail = document.querySelector('.rail');
+  const cur = document.querySelector('.rail-item[aria-current="true"]');
+  if (!rail || !cur) return null;
+  const r = rail.getBoundingClientRect();
+  const c = cur.getBoundingClientRect();
+  return { visible: c.left >= r.left - 1 && c.right <= r.right + 1, snap: getComputedStyle(rail).scrollSnapType };
+})()`);
+record('手机上当前块在左栏里可见（自动滚到中间）', railPeek?.visible === true, JSON.stringify(railPeek));
+
+/* 10. errors --------------------------------------------------------------- */
 record('全程无 console 报错/异常', cdp.consoleErrors.length === 0, cdp.consoleErrors.slice(0, 3).join(' | '));
 
 const failed = checks.filter((check) => !check.pass);

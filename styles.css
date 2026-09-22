@@ -274,11 +274,9 @@ ol {
   transition: opacity 200ms var(--ease);
 }
 
-/* Opening a block hands the whole page to it. */
-body[data-mode="focus"] .wall,
-body[data-mode="focus"] .hero {
-  display: none;
-}
+/* Opening a block does not replace the page — the sheet covers the wall and
+   scrolls on its own, so the reader's position is never lost and there is no
+   long slide on open or on close. */
 
 .section {
   position: relative;
@@ -504,7 +502,13 @@ body[data-mode="focus"] .hero {
 
 body[data-mode="focus"] .focus {
   display: block;
-  animation: focusIn 260ms var(--ease) both;
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--paper);
+  animation: focusIn 220ms var(--ease) both;
 }
 
 @keyframes focusIn {
@@ -519,7 +523,7 @@ body[data-mode="focus"] .focus {
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: clamp(18px, 2vw, 28px);
-  padding: clamp(18px, 2.4vw, 32px) 0 clamp(46px, 6vw, 86px);
+  padding: 0 0 clamp(46px, 6vw, 86px);
 }
 
 /* ---------------------------------------------------------------------- rail */
@@ -528,7 +532,8 @@ body[data-mode="focus"] .focus {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 8px;
+  padding: 10px var(--pad) 8px;
+  scroll-snap-type: x proximity;
   scrollbar-width: thin;
 }
 
@@ -538,7 +543,9 @@ body[data-mode="focus"] .focus {
   align-items: baseline;
   gap: 8px;
   width: 168px;
-  padding: 7px 9px;
+  min-height: 44px;
+  padding: 8px 10px;
+  scroll-snap-align: center;
   text-align: left;
   font-family: var(--sans);
   border: var(--bw) solid var(--ink);
@@ -592,10 +599,14 @@ body[data-mode="focus"] .focus {
 }
 
 .stage-bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 40px;
   padding: 6px 10px;
   border: var(--bw) solid var(--ink);
   background: var(--ink);
@@ -635,9 +646,9 @@ body[data-mode="focus"] .focus {
 .stage-btn {
   display: grid;
   place-items: center;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 4px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
   border: 1px solid var(--paper);
   font-family: var(--sans);
   font-size: 12px;
@@ -966,18 +977,19 @@ body[data-mode="focus"] .focus {
 
   .rail {
     position: sticky;
-    top: 74px;
+    top: 0;
     flex-direction: column;
     width: var(--rail);
-    max-height: calc(100vh - 96px);
+    max-height: 100vh;
     overflow-y: auto;
     overflow-x: hidden;
-    padding-right: 6px;
-    padding-bottom: 0;
+    padding: 0 6px 0 0;
+    scroll-snap-type: none;
   }
 
   .rail-item {
     width: 100%;
+    min-height: 0;
   }
 
   .stage-grid {
@@ -988,6 +1000,50 @@ body[data-mode="focus"] .focus {
 @media (min-width: 1180px) {
   .grid[data-cols='4'] {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Thumb-sized controls. The audit found the step/close buttons rendering at
+   18×20px and the back link 23px tall — under half of what a finger needs. */
+@media (max-width: 899px) {
+  .stage-bar {
+    min-height: 54px;
+    padding: 6px var(--pad);
+  }
+
+  .stage-btn {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .ghost {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 6px;
+  }
+
+  .header-tools a,
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .rail-rule {
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+  }
+
+  .arrow {
+    width: 48px;
+    height: 48px;
+  }
+
+  .site-footer a {
+    display: inline-block;
+    padding: 11px 0;
   }
 }
 

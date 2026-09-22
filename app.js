@@ -205,6 +205,11 @@ function renderFocus() {
         <div data-stage-slot>${stageMarkup(block)}</div>
       </div>
     </div>`;
+
+  /* On phones the rail is a horizontal strip showing four of sixteen blocks;
+     without this the current one is usually off to the right, invisible. */
+  const current = root.querySelector('.rail-item[aria-current="true"]');
+  current?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'instant' });
 }
 
 function renderChrome() {
@@ -408,7 +413,22 @@ const nextFrame = () =>
 
 let busy = false;
 
-async function openBlock(id, opener) {
+/** Can a ghost actually be seen travelling to this box? */
+function onScreen(rect) {
+  return Boolean(
+    rect
+    && rect.width > 0
+    && rect.bottom > 0
+    && rect.top < window.innerHeight
+    && rect.right > 0
+    && rect.left < window.innerWidth,
+  );
+}
+
+/* The detail sheet is an overlay, not a page swap: the wall stays exactly
+   where it was, so no scroll position is ever lost and both ends of the fly
+   animation hold still while it runs. */
+async function openBlock(id, opener, { push = true } = {}) {
   const block = byId(id);
   if (!block || busy) return;
 
@@ -420,7 +440,10 @@ async function openBlock(id, opener) {
   state.lightbox = null;
   document.body.dataset.mode = 'focus';
   renderFocus();
-  history.replaceState(null, '', `#/b/${id}`);
+  /* A click stacks an entry so Back closes; a deep link or popstate fills the
+     entry it already owns. */
+  if (push) history.pushState({ pandaBlock: id }, '', `#/b/${id}`);
+  else history.replaceState({ pandaBlock: id }, '', `#/b/${id}`);
 
   const stageMedia = root.querySelector('[data-stage-media]');
   const stageImage = stageMedia?.querySelector('img');
@@ -428,9 +451,9 @@ async function openBlock(id, opener) {
 
   try {
     await nextFrame();
-    window.scrollTo({ top: 0, behavior: reduced() ? 'auto' : 'smooth' });
-    await nextFrame();
     if (from && stageMedia) await fly(from, rectOf(stageMedia), img(block.img));
+    const sheet = root.querySelector('.focus');
+    if (sheet) sheet.scrollTop = 0;
     root.querySelector('.stage')?.focus({ preventScroll: true });
   } finally {
     if (stageImage) stageImage.style.opacity = '';
@@ -438,7 +461,7 @@ async function openBlock(id, opener) {
   }
 }
 
-async function closeBlock() {
+async function closeBlock({ keepHistory = false } = {}) {
   if (busy || !state.activeId) return;
   const block = byId(state.activeId);
   busy = true;
@@ -451,23 +474,31 @@ async function closeBlock() {
     state.lightbox = null;
     document.body.dataset.mode = 'wall';
     root.querySelector('.focus').innerHTML = '';
-    history.replaceState(null, '', location.pathname + location.search);
+    if (!keepHistory) history.replaceState(null, '', location.pathname + location.search);
 
-    /* The tile we came from may be off-screen; bring it into view first so the
-       ghost image flies to a rectangle that is actually visible. */
+    /* The wall never moved, so the tile is still where the reader left it.
+       Only fly back when that spot is genuinely on screen. */
     const tile = root.querySelector(`.tile[data-open="${block.id}"]`);
-    if (tile) tile.scrollIntoView({ block: 'center', behavior: 'auto' });
-    await nextFrame();
-
     const targetMedia = tile?.querySelector('.tile-media') ?? null;
+    const to = targetMedia ? rectOf(targetMedia) : null;
+    const canFly = Boolean(from) && onScreen(to);
     const targetImage = targetMedia?.querySelector('img');
-    if (targetImage) targetImage.style.opacity = '0';
+    if (canFly && targetImage) targetImage.style.opacity = '0';
 
-    if (from && targetMedia) await fly(from, rectOf(targetMedia), img(block.img));
+    if (canFly) await fly(from, to, img(block.img));
+    if (targetImage) targetImage.style.opacity = '';
     tile?.focus({ preventScroll: true });
   } finally {
     busy = false;
   }
+}
+
+/** The ✕ and the browser Back button share one path so the history stack stays
+   honest — pressing back on a phone closes the block instead of leaving. */
+function requestClose() {
+  if (!state.activeId) return;
+  if (history.state?.pandaBlock) history.back();
+  else closeBlock();
 }
 
 function step(delta) {
@@ -484,9 +515,12 @@ async function openFromRail(id) {
   state.activeId = id;
   state.lightbox = null;
   renderFocus();
-  history.replaceState(null, '', `#/b/${id}`);
-  const stage = root.querySelector('.stage');
-  stage?.focus({ preventScroll: true });
+  /* Swapping inside an open sheet replaces the entry rather than stacking one
+     per block, so Back leaves the sheet instead of walking the whole rail. */
+  history.replaceState({ pandaBlock: id }, '', `#/b/${id}`);
+  const sheet = root.querySelector('.focus');
+  if (sheet) sheet.scrollTop = 0;
+  root.querySelector('.stage')?.focus({ preventScroll: true });
   await wait(40);
   busy = false;
 }
@@ -539,7 +573,7 @@ function closeLightbox() {
 /* -------------------------------------------------------------- event wiring */
 
 root.addEventListener('click', (event) => {
-  if (event.target.closest('[data-close]')) return closeBlock();
+  if (event.target.closest('[data-close]')) return requestClose();
 
   const shot = event.target.closest('[data-shot]');
   if (shot) return openLightbox(Number(shot.dataset.shot));
@@ -554,7 +588,7 @@ root.addEventListener('click', (event) => {
 
   const id = opener.dataset.open;
   if (document.body.dataset.mode === 'focus') {
-    if (id === state.activeId) closeBlock();
+    if (id === state.activeId) requestClose();
     else openFromRail(id);
   } else {
     openBlock(id, opener);
@@ -564,7 +598,7 @@ root.addEventListener('click', (event) => {
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     if (state.lightbox !== null) closeLightbox();
-    else if (state.activeId) closeBlock();
+    else if (state.activeId) requestClose();
     return;
   }
 
@@ -602,35 +636,24 @@ document.addEventListener('keydown', (event) => {
   tiles[next].focus();
 });
 
-/* Deep links: #/b/<id> opens that block on load and keeps Back working. */
-function syncFromHash() {
+/* Deep links and Back: #/b/<id> is the single source of truth for the sheet. */
+function applyHash() {
   const match = /^#\/b\/(.+)$/.exec(location.hash);
   const id = match ? match[1] : null;
-  if (!byId(id)) return;
-  if (id === state.activeId) return;
-  state.activeId = id;
-  document.body.dataset.mode = 'focus';
-  renderFocus();
-}
-
-window.addEventListener('hashchange', () => {
-  const match = /^#\/b\/(.+)$/.exec(location.hash);
-  if (!match) {
-    if (state.activeId) {
-      state.activeId = null;
-      document.body.dataset.mode = 'wall';
-      root.querySelector('.focus').innerHTML = '';
-    }
+  if (id && byId(id)) {
+    if (id !== state.activeId) openBlock(id, null, { push: false });
     return;
   }
-  syncFromHash();
-});
+  if (state.activeId) closeBlock({ keepHistory: true });
+}
+
+window.addEventListener('popstate', applyHash);
 
 /* --------------------------------------------------------------- boot */
 
 document.documentElement.lang = 'zh-CN';
 renderChrome();
-syncFromHash();
+applyHash();
 
 /* The dither is rasterised at a fixed low resolution, so it has to be redrawn
    when the hero changes width. */
