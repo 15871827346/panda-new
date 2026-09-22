@@ -224,84 +224,160 @@ for (const [label, url, w, h, openSel] of [
   }
 }
 
-/* --------------------------------------------- 5. mobile rail discoverability */
-console.log('\n=== 5. 手机端左栏（切换下一个块的地方） ===');
+/* ------------------------------------- 5. 清单抽屉：收起与展开两种状态 */
+console.log('\n=== 5. 清单抽屉（收起时不占空间，展开时竖排两列） ===');
 await load(BASE, 390, 844);
 await cdp.eval(`document.querySelector('.tile[data-open="record-001"]').scrollIntoView({block:'center',behavior:'instant'})`);
 await sleep(600);
 await cdp.click('.tile[data-open="record-001"]');
 await sleep(1600);
 console.log('  打开后模式：', await mode());
-const rail = await cdp.eval(`(() => {
-  const el = document.querySelector('.rail');
-  const r = el.getBoundingClientRect();
+
+const drawerShape = await cdp.eval(`(() => {
+  const rail = document.querySelector('.rail');
+  const cs = getComputedStyle(rail);
+  const box = rail.getBoundingClientRect();
+  const closed = {
+    visibility: cs.visibility,
+    offScreen: Math.round(box.top) >= window.innerHeight - 1,
+    occupiesReadingSpace: box.top < window.innerHeight && cs.visibility !== 'hidden',
+  };
+  document.querySelector('[data-open-list]').click();
+  return closed;
+})()`);
+console.log(`  收起时：visibility=${drawerShape.visibility}，移出屏幕外=${drawerShape.offScreen ? '是' : '否'}，占用阅读空间=${drawerShape.occupiesReadingSpace ? '是（问题）' : '否'}`);
+await sleep(700);
+
+const openShape = await cdp.eval(`(() => {
+  const rail = document.querySelector('.rail');
+  const cs = getComputedStyle(rail);
+  const box = rail.getBoundingClientRect();
+  const rows = new Set([...rail.querySelectorAll('.rail-item')].map((el) => Math.round(el.getBoundingClientRect().top)));
   return {
-    top: Math.round(r.top), height: Math.round(r.height),
-    visibleItems: Math.round(r.width / (el.firstElementChild?.getBoundingClientRect().width || 1)),
-    total: el.querySelectorAll('.rail-item').length,
-    scrollableW: el.scrollWidth, clientW: el.clientWidth,
-    direction: getComputedStyle(el).flexDirection,
+    height: Math.round(box.height),
+    pctOfViewport: Math.round((box.height / window.innerHeight) * 100) ,
+    columns: getComputedStyle(rail).gridTemplateColumns.split(' ').length,
+    rows: rows.size,
+    total: rail.querySelectorAll('.rail-item').length,
+    verticalScroll: Math.max(0, rail.scrollHeight - rail.clientHeight),
+    rules: rail.querySelectorAll('.rail-rule').length,
   };
 })()`);
-console.log(`  横排方向 ${rail.direction}，占 ${rail.height}px 高，一屏只看得见约 ${rail.visibleItems} 项 / 共 ${rail.total} 项`);
-console.log(`  需要横向拖动 ${rail.scrollableW - rail.clientW}px 才能看完`);
-
-const viewportBudget = await cdp.eval(`(() => {
-  const stage = document.querySelector('.stage').getBoundingClientRect();
-  return { stageTop: Math.round(stage.top), vh: window.innerHeight };
-})()`);
-console.log(`  主内容从视口 ${viewportBudget.stageTop}px 处开始（视口高 ${viewportBudget.vh}px）`);
+console.log(`  展开时：高 ${openShape.height}px（视口的 ${openShape.pctOfViewport}%），${openShape.columns} 列 × ${openShape.rows} 行可见，共 ${openShape.total} 项 / ${openShape.rules} 个分组标题`);
+console.log(`  → 抽屉内部还需纵向滚动 ${openShape.verticalScroll}px；横向拖动需求 0px`);
 
 /* --------------------------------- 6. 读完一块之后，换块要费多少事（核心指标） */
 console.log('\n=== 6. 读完一块后换到别的块要付多少操作（核心指标） ===');
 
+/* Design-agnostic and hit-tested: from wherever the reader has scrolled, how
+   far must they scroll before some control that moves to another block can
+   actually be pressed? elementFromPoint rather than rectangle comparison,
+   because an element can be inside the viewport and still be covered. */
 const REACH_PROBE = `(() => {
   const sheet = document.querySelector('.focus');
-  const rail = document.querySelector('.rail');
   const vh = window.innerHeight;
-  const inView = (el) => {
-    if (!el) return false;
-    const r = el.getBoundingClientRect();
-    if (getComputedStyle(el).visibility === 'hidden' || !r.width || !r.height) return false;
-    return r.bottom > 0 && r.top < vh;
-  };
-  const inThumbZone = (el) => {
-    if (!el) return false;
-    const r = el.getBoundingClientRect();
-    if (getComputedStyle(el).visibility === 'hidden' || !r.width || !r.height) return false;
-    return r.top >= vh * 0.6 && r.bottom <= vh + 1;
-  };
+  const original = sheet.scrollTop;
 
-  /* Everything that can move you to a different block. */
-  const switchers = [
-    ...document.querySelectorAll('.rail-item'),
-    ...document.querySelectorAll('[data-step], [data-next], [data-prev], [data-open-list]'),
-  ];
+  const hittable = () => [...document.querySelectorAll('[data-next], [data-prev], [data-open-list], [data-step]')]
+    .filter((el) => {
+      const r = el.getBoundingClientRect();
+      if (getComputedStyle(el).visibility === 'hidden' || !r.width || !r.height) return false;
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return Boolean(hit && (hit === el || el.contains(hit)));
+    }).length;
 
-  const railBox = rail ? rail.getBoundingClientRect() : null;
-  const railOffsetTop = rail
-    ? Math.round(rail.getBoundingClientRect().top - sheet.getBoundingClientRect().top + sheet.scrollTop)
-    : null;
+  const atBottom = hittable();
+  let scrollBack = 0;
+  let probes = 0;
+  if (atBottom === 0) {
+    const max = sheet.scrollHeight - sheet.clientHeight;
+    for (let y = original; y >= 0; y -= Math.max(40, max / 40)) {
+      probes += 1;
+      sheet.scrollTop = Math.max(0, y);
+      if (hittable() > 0) { scrollBack = original - sheet.scrollTop; break; }
+    }
+    if (scrollBack === 0 && atBottom === 0) scrollBack = original;
+  }
+  sheet.scrollTop = original;
+
+  const bar = document.querySelector('.sheet-bar');
+  const barBox = bar ? bar.getBoundingClientRect() : null;
+  const rail = document.querySelector('.rail');
 
   return {
-    scrollTop: Math.round(sheet.scrollTop),
+    scrollTop: Math.round(original),
     maxScroll: Math.round(sheet.scrollHeight - sheet.clientHeight),
-    railOffsetTop,
-    /* How far up the reader must scroll before the "jump to any block" list
-       is on screen again. 0 means it never leaves. */
-    scrollBackToRail: rail ? Math.max(0, sheet.scrollTop - Math.max(0, railOffsetTop + railBox.height - vh)) : null,
-    switchersVisible: switchers.filter(inView).length,
-    switchersInThumbZone: switchers.filter(inThumbZone).length,
+    hittableAtBottom: atBottom,
+    scrollBackToReachASwitch: Math.round(scrollBack),
+    probes,
+    barHeight: barBox ? Math.round(barBox.height) : null,
+    barSharePct: barBox ? Math.round((barBox.height / vh) * 1000) / 10 : null,
     railDragNeeded: rail ? Math.max(0, rail.scrollWidth - rail.clientWidth) : null,
+    vh,
   };
 })()`;
 
+/* Self-contained: the previous section leaves the drawer open, and an open
+   drawer correctly covers the sheet bar, which would make this read 0. */
+await load(BASE, 390, 844);
+await cdp.eval(`document.querySelector('.tile[data-open="record-001"]').scrollIntoView({block:'center',behavior:'instant'})`);
+await sleep(600);
+await cdp.click('.tile[data-open="record-001"]');
+await sleep(1600);
 await cdp.eval(`(() => { const s = document.querySelector('.focus'); s.scrollTop = s.scrollHeight; })()`);
 await sleep(700);
 const reach = await cdp.eval(REACH_PROBE);
-console.log(`  面板总高 ${reach.maxScroll}px，已读到底（scrollTop=${reach.scrollTop}）`);
-console.log(`  → 要够到"跳到任意块"的清单，需往上滚 ${reach.scrollBackToRail}px`);
-console.log(`  → 此刻视口内可见的换块控件：${reach.switchersVisible} 个，其中在拇指区（下 40%）：${reach.switchersInThumbZone} 个`);
-console.log(`  → 清单本身还要横向拖动 ${reach.railDragNeeded}px 才能看到全部 16 项`);
+console.log(`  面板可滚 ${reach.maxScroll}px，已读到底（scrollTop=${reach.scrollTop}）`);
+console.log(`  → 此刻可直接按到的换块控件：${reach.hittableAtBottom} 个`);
+console.log(`  → 要往上滚 ${reach.scrollBackToReachASwitch}px 才够到换块控件（试探 ${reach.probes} 次）`);
+console.log(`  → 吸底条高 ${reach.barHeight}px，占视口 ${reach.barSharePct}%，剩余阅读高 ${reach.vh - reach.barHeight}px`);
+console.log(`  → 清单横向拖动需求：${reach.railDragNeeded}px（0 = 已改为竖排抽屉）`);
+
+/* --------------------------------- 7. 换块的代价：位置记忆与清单稳定性 */
+console.log('\n=== 7. 换块代价（阅读位置 / 清单是否被重建） ===');
+const switchCost = await cdp.eval(`(async () => {
+  const sheet = document.querySelector('.focus');
+  const rail = document.querySelector('.rail');
+  rail.dataset.probe = 'keepme';
+  const out = {};
+  sheet.scrollTop = 400;
+  out.leftAt = Math.round(sheet.scrollTop);
+  document.querySelector('[data-prev]').click();
+  await new Promise((r) => setTimeout(r, 900));
+  out.afterPrev = Math.round(sheet.scrollTop);
+  document.querySelector('[data-next]').click();
+  await new Promise((r) => setTimeout(r, 900));
+  out.resumedTo = Math.round(sheet.scrollTop);
+  out.railRebuilt = document.querySelector('.rail').dataset.probe !== 'keepme';
+  return out;
+})()`);
+console.log(`  离开时 ${switchCost.leftAt}px → 去上一块 → 回来停在 ${switchCost.resumedTo}px`);
+console.log(`  → 位置找回误差 ${Math.abs(switchCost.resumedTo - switchCost.leftAt)}px`);
+console.log(`  → 清单是否被重建：${switchCost.railRebuilt ? '是（每次换块都会闪一下）' : '否'}`);
+
+/* --------------------------------- 8. 尺寸矩阵 */
+console.log('\n=== 8. 各视口下的触控目标矩阵 ===');
+const SIZES = [['手机 390×844', 390, 844, true], ['平板 834×1112', 834, 1112, true], ['桌面 1440×900', 1440, 900, false]];
+for (const [label, w, h, mobile] of SIZES) {
+  await load(`${BASE}#/b/record-001`, w, h);
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile });
+  await sleep(900);
+  const row = await cdp.eval(`(() => {
+    const decorative = /tile-x|tile-plus/;
+    const shown = (el) => (el.checkVisibility
+      ? el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })
+      : Boolean(el.offsetWidth || el.offsetHeight)) && !el.closest('[inert]');
+    const all = [...document.querySelectorAll('button, a')].filter(shown);
+    const small = all.filter((el) => { const r = el.getBoundingClientRect(); return r.height < 44 && !decorative.test(el.className); });
+    return {
+      coarse: matchMedia('(pointer: coarse)').matches,
+      targets: all.length,
+      under44: small.length,
+      layout: getComputedStyle(document.querySelector('.rail')).position,
+      bar: document.querySelector('.sheet-bar') ? getComputedStyle(document.querySelector('.sheet-bar')).display : 'none',
+    };
+  })()`);
+  console.log(`  ${label.padEnd(16)} 左栏=${row.layout.padEnd(7)} 吸底条=${row.bar.padEnd(6)} 目标 ${row.targets} 个，小于44px ${row.under44} 个`);
+}
 
 browser.kill();

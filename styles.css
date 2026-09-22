@@ -1281,4 +1281,11 @@ html[lang="zh-CN"] .tile-summary {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+
+  /* The drawer still has to arrive and leave; only the slide is dropped. */
+  .rail,
+  .sheet-bar,
+  .focus {
+    scroll-behavior: auto;
+  }
 }

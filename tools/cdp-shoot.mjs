@@ -232,6 +232,23 @@ const SCENARIOS = [
     height: 700,
     url: BASE,
   },
+  {
+    /* The two new phone surfaces: the thumb-zone bar, and the list drawer. */
+    name: 'phone-sheet-bar-at-bottom',
+    width: 390,
+    height: 844,
+    url: BASE,
+    click: '.tile[data-open="record-001"]',
+    scrollToBottom: true,
+  },
+  {
+    name: 'phone-list-drawer',
+    width: 390,
+    height: 844,
+    url: BASE,
+    click: '.tile[data-open="record-001"]',
+    thenClick: '[data-open-list]',
+  },
 ];
 
 const browser = spawn(
@@ -285,6 +302,11 @@ for (const scenario of SCENARIOS) {
     }
 
     if (scenario.click) await clickSelector(cdp, scenario.click);
+    if (scenario.scrollToBottom) {
+      await cdp.evaluate('(() => { const s = document.querySelector(".focus"); s.scrollTop = s.scrollHeight; })()');
+      await sleep(500);
+    }
+    if (scenario.thenClick) await clickSelector(cdp, scenario.thenClick);
 
     const readiness = await imagesReady(cdp);
 
