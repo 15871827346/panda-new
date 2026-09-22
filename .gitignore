@@ -1,0 +1,10 @@
+# Generated verification screenshots — rebuild with `node tools/cdp-shoot.mjs`
+shots/
+
+# Build output from tools/build-assets.mjs
+tools/assets-report.json
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.log
