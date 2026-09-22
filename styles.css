@@ -279,6 +279,13 @@ ol {
   gap: 7px;
 }
 
+/* Says what the wall does, in one line, where the eye lands after the slogan. */
+.hero-hint {
+  margin: 0;
+  padding-top: 2px;
+  color: var(--ink-faint);
+}
+
 .caps li {
   padding: 4px 10px;
   border: var(--bw) solid var(--ink);
@@ -530,10 +537,11 @@ body[data-mode="focus"] .focus {
   animation: focusIn 220ms var(--ease) both;
 }
 
+/* Opacity only: a transform here would re-anchor the fixed drawer and
+   backdrop for the length of the animation. */
 @keyframes focusIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
   }
 }
 
@@ -547,13 +555,173 @@ body[data-mode="focus"] .focus {
 
 /* ---------------------------------------------------------------------- rail */
 
+/* On phones the list of all blocks is a drawer that rises from the bottom, so
+   it is reachable from anywhere in a long sheet without scrolling back up.
+   It is deliberately NOT a sticky strip: that would spend ~64px of reading
+   height permanently and still show only a couple of the sixteen. */
 .rail {
-  display: flex;
+  position: fixed;
+  inset: auto 0 0 0;
+  /* Above the sheet bar: at z 5 the drawer's last rows sat underneath the
+     sticky bar and tapping them hit 下一篇 instead. */
+  z-index: 8;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  overflow-x: auto;
-  padding: 10px var(--pad) 8px;
-  scroll-snap-type: x proximity;
-  scrollbar-width: thin;
+  align-content: start;
+  max-height: min(78vh, 640px);
+  max-height: min(78dvh, 640px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 0 var(--pad) calc(16px + var(--safe-b));
+  border-top: var(--bw) solid var(--ink);
+  background: var(--paper);
+  transform: translate3d(0, 105%, 0);
+  visibility: hidden;
+  transition:
+    transform 240ms var(--ease),
+    visibility 0s linear 240ms;
+}
+
+body[data-list='open'] .rail {
+  transform: none;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.rail-head {
+  grid-column: 1 / -1;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0 10px;
+  border-bottom: var(--bw) solid var(--ink);
+  background: var(--paper);
+}
+
+.rail-hint {
+  max-width: 34ch;
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.rail-done {
+  flex: none;
+  min-height: var(--tap);
+  padding: 6px 14px;
+  border: var(--bw) solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.list-backdrop {
+  position: fixed;
+  inset: 0;
+  /* Covers the bar too, so a tap anywhere outside the list dismisses it. */
+  z-index: 7;
+  display: none;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  /* A grey wash, not a colour — the palette stays monochrome. */
+  background: rgb(30 30 30 / 0.45);
+}
+
+body[data-list='open'] .list-backdrop {
+  display: block;
+}
+
+/* ------------------------------------------------------- thumb-zone bar */
+
+/* Sticky rather than fixed: .focus is the scroll container and carries an
+   entrance transform, and a transform re-anchors fixed descendants. */
+.sheet-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  border-top: var(--bw) solid var(--ink);
+  background: var(--paper);
+  padding-bottom: var(--safe-b);
+}
+
+.sheet-bar-inner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+  min-height: var(--sheet-bar);
+  padding-block: 6px;
+}
+
+.bar-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--tap);
+  padding: 4px 10px;
+  border: var(--bw) solid var(--ink);
+  background: var(--panel);
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.bar-cell:active {
+  transform: translate(1px, 1px);
+}
+
+.bar-prev {
+  flex: none;
+}
+
+.bar-prev span:first-child {
+  font-size: 17px;
+  line-height: 1;
+}
+
+/* The primary cell is the one thing a thumb should be aiming at. */
+.bar-next {
+  justify-content: flex-start;
+  gap: 8px;
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.bar-kicker {
+  flex: none;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.bar-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar-arrow {
+  flex: none;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.bar-list {
+  flex: none;
 }
 
 .rail-item {
@@ -561,10 +729,9 @@ body[data-mode="focus"] .focus {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  width: 168px;
+  width: 100%;
   min-height: var(--tap);
   padding: 8px 10px;
-  scroll-snap-align: center;
   text-align: left;
   font-family: var(--sans);
   border: var(--bw) solid var(--ink);
@@ -601,6 +768,7 @@ body[data-mode="focus"] .focus {
    bands instead of one long list. */
 .rail-rule {
   flex: none;
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   min-height: var(--tap);
@@ -998,21 +1166,43 @@ body[data-mode="focus"] .focus {
     gap: clamp(24px, 2.6vw, 36px);
   }
 
+  /* The stage moved earlier in the DOM so Tab runs content then list. Placing
+     them by grid line puts them back where they were visually. */
+  [data-stage-slot] {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
   .rail {
     position: sticky;
-    top: 0;
+    inset: auto;
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
     flex-direction: column;
     width: var(--rail);
     max-height: 100vh;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 0 6px 0 0;
-    scroll-snap-type: none;
+    border: 0;
+    background: transparent;
+    transform: none;
+    visibility: visible;
+    transition: none;
+    touch-action: auto;
   }
 
   .rail-item {
     width: 100%;
     min-height: 0;
+  }
+
+  /* The drawer chrome has no job when the list is already on screen. */
+  .rail-head,
+  .list-backdrop,
+  .sheet-bar {
+    display: none;
   }
 
   .stage-grid {

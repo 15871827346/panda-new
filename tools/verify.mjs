@@ -5,6 +5,12 @@
      node tools/verify.mjs
 --------------------------------------------------------------------------- */
 import { spawn } from 'node:child_process';
+/* Imported so the assertions can be derived from the real block order instead
+   of hard-coding titles that would go stale silently. */
+import { BLOCKS } from '../data.js';
+
+const nextOf = (id) => BLOCKS[BLOCKS.findIndex((b) => b.id === id) + 1]?.title.zh ?? null;
+const prevOf = (id) => BLOCKS[BLOCKS.findIndex((b) => b.id === id) - 1]?.title.zh ?? null;
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -135,6 +141,8 @@ const probe = () =>
     rail: document.querySelectorAll('.rail-item').length,
     railCurrent: document.querySelector('.rail-item[aria-current="true"]')?.textContent?.trim() ?? null,
     scrollY: Math.round(window.scrollY),
+    sheetScroll: (() => { const f = document.querySelector('.focus'); return f ? Math.round(f.scrollTop) : null; })(),
+    listOpen: document.body.dataset.list === 'open',
     sheetPosition: (() => { const f = document.querySelector('.focus'); return f ? getComputedStyle(f).position : null; })(),
     wall: getComputedStyle(document.querySelector('.wall')).display !== 'none',
     lightbox: !!document.querySelector('.lightbox'),
@@ -193,12 +201,12 @@ record('Esc 先关大图、仍在放大态', !s.lightbox && s.mode === 'focus');
 
 /* 5. keyboard stepping ----------------------------------------------------- */
 const before = s.title;
-await cdp.key('ArrowDown', 'ArrowDown', 40);
+await cdp.key('ArrowRight', 'ArrowRight', 39);
 s = await probe();
 record('方向键切换上/下一个块', s.title !== before, `${before} → ${s.title}`);
 
 /* 6. return to the wall ---------------------------------------------------- */
-await cdp.click('[data-close]');
+await cdp.click('.stage-bar [data-close]');
 s = await probe();
 record('点返回回到方块墙', s.mode === 'wall' && s.wall, `mode=${s.mode}`);
 record('返回后清除深链', s.hash === '', `hash=${s.hash}`);
@@ -241,7 +249,7 @@ const latinLeak = await cdp.evaluate(`(() => {
 })()`);
 record('首屏无残留英文文案', latinLeak === '', latinLeak);
 
-/* 9. thumb targets on a phone ---------------------------------------------- */
+/* 9. phone: reach another block without going back up --------------------- */
 await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
 await cdp.send('Page.navigate', { url: BASE });
 await sleep(2200);
@@ -251,24 +259,225 @@ await cdp.click('.tile[data-open="record-001"]');
 await sleep(1500);
 const sheetOnPhone = await probe();
 record('手机上详情铺满整屏', sheetOnPhone.sheetPosition === 'fixed' && sheetOnPhone.mode === 'focus');
-const smallTargets = await cdp.evaluate(`(() => {
+
+/* Read to the very bottom — where the old layout stranded the reader. */
+await cdp.evaluate(`(() => { const s = document.querySelector('.focus'); s.scrollTop = s.scrollHeight; })()`);
+await sleep(600);
+const depth = await cdp.evaluate('Math.round(document.querySelector(".focus").scrollTop)');
+record('确实已滚到长内容底部', depth > 500, `scrollTop=${depth}px`);
+
+const bar = await cdp.evaluate(`(() => {
+  const el = document.querySelector('[data-next]');
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  return {
+    h: Math.round(r.height), w: Math.round(r.width),
+    inThumbZone: r.top >= window.innerHeight * 0.6,
+    unobstructed: Boolean(hit && (hit === el || el.contains(hit))),
+  };
+})()`);
+record('「下一篇」落在拇指区（视口下 40%）', bar?.inThumbZone === true, JSON.stringify(bar));
+record('「下一篇」没有被任何元素压住', bar?.unobstructed === true);
+record('「下一篇」触控高度 ≥44px', (bar?.h ?? 0) >= 44, `${bar?.h}px`);
+
+/* A4 — the label is checked against the data, not a hard-coded string. */
+const expectedNext = nextOf('record-001');
+const nextLabel = await cdp.evaluate(`document.querySelector('[data-next] .bar-title')?.textContent?.trim() ?? ''`);
+record('按钮写的就是它要去的块名', nextLabel === expectedNext, `标「${nextLabel}」/ 数据下一块「${expectedNext}」`);
+
+/* A1 — the headline claim: one tap from the bottom, no scrolling back. */
+await cdp.click('[data-next]');
+await sleep(1300);
+const afterNext = await probe();
+record('一次点击即从底部换到下一篇', afterNext.title === expectedNext, `title=${afterNext.title}`);
+record('换到没看过的块从头显示', afterNext.sheetScroll === 0, `sheetScroll=${afterNext.sheetScroll}`);
+record('换块时页面本身仍未被甩走', afterNext.scrollY === sheetOnPhone.scrollY, `scrollY=${afterNext.scrollY}`);
+
+/* A5 — switching must not rebuild the list. */
+await cdp.evaluate(`document.querySelector('.rail').dataset.probe = 'keepme'`);
+await cdp.evaluate(`(() => { const r = document.querySelector('.rail'); r.scrollTop = 40; })()`);
+await cdp.click('[data-next]');
+await sleep(1200);
+const railIntact = await cdp.evaluate(`(() => {
+  const r = document.querySelector('.rail');
+  return { tag: r?.dataset.probe ?? null, items: r?.querySelectorAll('.rail-item').length ?? 0 };
+})()`);
+record('换块时清单未被重建', railIntact.tag === 'keepme', JSON.stringify(railIntact));
+record('换块后清单仍是完整 16 项', railIntact.items === 16, `items=${railIntact.items}`);
+
+/* A6 — per-block reading position. Use the value the sheet actually reached:
+   a short block cannot scroll as far as a long one, so asking for a fixed
+   number would be asserting against a position that does not exist. */
+const setScroll = await cdp.evaluate(`(() => { const s = document.querySelector('.focus'); s.scrollTop = 320; return Math.round(s.scrollTop); })()`);
+await sleep(300);
+await cdp.click('[data-prev]');
+await sleep(1200);
+await cdp.click('[data-next]');
+await sleep(1200);
+const resumed = await probe();
+record('回到看过的块会停在原处', Math.abs((resumed.sheetScroll ?? 0) - setScroll) <= 6, `期望 ${setScroll}，实得 ${resumed.sheetScroll}`);
+
+/* A2 — the list is reachable from mid-sheet via the drawer. */
+await cdp.click('[data-open-list]');
+await sleep(700);
+const drawer = await cdp.evaluate(`(() => {
+  const rail = document.querySelector('.rail');
+  const cs = getComputedStyle(rail);
+  const cur = rail.querySelector('.rail-item[aria-current="true"]');
+  const box = cur?.getBoundingClientRect();
+  const railBox = rail.getBoundingClientRect();
+  return {
+    open: document.body.dataset.list === 'open',
+    visible: cs.visibility === 'visible',
+    items: rail.querySelectorAll('.rail-item').length,
+    rules: rail.querySelectorAll('.rail-rule').length,
+    overscroll: cs.overscrollBehaviorY,
+    touchAction: cs.touchAction,
+    currentOnScreen: Boolean(box && box.top >= railBox.top && box.bottom <= railBox.bottom + 1),
+    stageInert: document.querySelector('.stage')?.hasAttribute('inert') ?? false,
+  };
+})()`);
+record('「全部方块」升起清单抽屉', drawer.open && drawer.visible, JSON.stringify(drawer));
+record('抽屉里 16 块齐全、分组条 4 条', drawer.items === 16 && drawer.rules === 4, `${drawer.items}/${drawer.rules}`);
+record('抽屉当前块已滚到可见位置', drawer.currentOnScreen === true);
+record('抽屉滚动不外溢（overscroll contain）', drawer.overscroll === 'contain', drawer.overscroll);
+record('抽屉只允许纵向手势', /^pan-y/.test(drawer.touchAction ?? ''), drawer.touchAction);
+record('抽屉打开时舞台被 inert 隔离', drawer.stageInert === true);
+
+/* Every drawer row must be genuinely tappable, not merely inside the drawer's
+   box. The sticky sheet bar painted over the last rows until z-order was
+   fixed, and a rect-containment comparison could not see that. */
+const hitAll = await cdp.evaluate(`(() => {
+  const rail = document.querySelector('.rail');
+  const misses = [];
+  for (const item of rail.querySelectorAll('.rail-item')) {
+    rail.scrollTop = Math.max(0, item.offsetTop - rail.clientHeight / 2 + item.offsetHeight / 2);
+    const r = item.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    if (!hit || !item.contains(hit)) {
+      misses.push(item.dataset.open + '→' + (hit?.closest('[data-open]')?.dataset.open ?? hit?.className ?? 'null'));
+    }
+  }
+  return misses;
+})()`);
+record('抽屉 16 项逐条命中测试全部可点', hitAll.length === 0, hitAll.slice(0, 4).join(', '));
+
+/* Bring the target item inside the drawer's own scroll first. Tapping an
+   element that is scrolled out of its container would hit whatever is painted
+   at those coordinates instead — a real reader never does this. */
+const tapRailItem = async (id) => {
+  await cdp.evaluate(`(() => {
+    const rail = document.querySelector('.rail');
+    const item = rail.querySelector('.rail-item[data-open="${id}"]');
+    rail.scrollTop = Math.max(0, item.offsetTop - rail.clientHeight / 2 + item.offsetHeight / 2);
+  })()`);
+  await sleep(400);
+  await cdp.click(`.rail-item[data-open="${id}"]`);
+  await sleep(1300);
+};
+
+await tapRailItem('record-007');
+const jumped = await probe();
+record('从抽屉直接跳到指定块', jumped.title === 'Mini-HBUT 校园信息服务', `title=${jumped.title}`);
+record('跳转后抽屉自动收起', jumped.listOpen === false);
+
+/* A3 — the old foot-gun: tapping the current block must not close the sheet. */
+await cdp.click('[data-open-list]');
+await sleep(600);
+const titleBeforeSelfTap = (await probe()).title;
+await tapRailItem('record-007');
+const selfTap = await probe();
+record(
+  '点当前块只收清单、不关详情页',
+  selfTap.mode === 'focus' && selfTap.title === titleBeforeSelfTap && selfTap.listOpen === false,
+  `mode=${selfTap.mode} listOpen=${selfTap.listOpen}`,
+);
+
+/* A12 — aria-current is honest. */
+const ariaCurrent = await cdp.evaluate(`(() => ({
+  falseOnes: document.querySelectorAll('.rail-item[aria-current="false"]').length,
+  trueOnes: document.querySelectorAll('.rail-item[aria-current="true"]').length,
+}))()`);
+record('aria-current 只标当前块', ariaCurrent.falseOnes === 0 && ariaCurrent.trueOnes === 1, JSON.stringify(ariaCurrent));
+
+/* A13 — the two strings that used to be dead. */
+await cdp.evaluate('history.back()');
+await sleep(1200);
+const hints = await cdp.evaluate(`(() => ({
+  open: document.querySelector('.hero-hint')?.textContent?.trim() ?? '',
+}))()`);
+record('首屏出现了"点方块放大"的提示', hints.open.includes('点击任意方块放大'), hints.open);
+
+/* A9 — the sticky bar must not sit on top of the last gallery image. */
+await cdp.evaluate(`document.querySelector('.tile[data-open="record-001"]').scrollIntoView({block:'center',behavior:'instant'})`);
+await sleep(400);
+await cdp.click('.tile[data-open="record-001"]');
+await sleep(1400);
+await cdp.evaluate(`(() => { const s = document.querySelector('.focus'); s.scrollTop = s.scrollHeight; })()`);
+await sleep(500);
+const overlap = await cdp.evaluate(`(() => {
+  const items = document.querySelectorAll('.gallery-item');
+  const last = items[items.length - 1];
+  const bar = document.querySelector('.sheet-bar');
+  if (!last || !bar) return null;
+  return { gap: Math.round(bar.getBoundingClientRect().top - last.getBoundingClientRect().bottom) };
+})()`);
+record('吸底条不遮住最后一张图', overlap === null || overlap.gap >= -1, JSON.stringify(overlap));
+
+/* Target sweep — with a predicate that can actually see fixed elements. */
+const sweepTargets = `((() => {
   const decorative = /tile-x|tile-plus/;
+  const shown = (el) => (el.checkVisibility
+    ? el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })
+    : Boolean(el.offsetWidth || el.offsetHeight)) && !el.closest('[inert]');
   return [...document.querySelectorAll('button, a')]
-    .filter((el) => el.offsetParent !== null)
+    .filter(shown)
     .map((el) => { const r = el.getBoundingClientRect(); return { what: el.className || el.tagName, w: Math.round(r.width), h: Math.round(r.height) }; })
     .filter((i) => i.h < 44 && !decorative.test(i.what))
     .map((i) => i.what + ' ' + i.w + 'x' + i.h);
+})())`;
+const closedSweep = await cdp.evaluate(sweepTargets);
+record('手机上可见目标全部 ≥44px（关闭抽屉）', closedSweep.length === 0, closedSweep.slice(0, 5).join(', '));
+await cdp.click('[data-open-list]');
+await sleep(700);
+const openSweep = await cdp.evaluate(sweepTargets);
+record('抽屉打开后可见目标全部 ≥44px', openSweep.length === 0, openSweep.slice(0, 5).join(', '));
+await cdp.evaluate(`document.body.dataset.list !== 'open' || document.querySelector('.rail-done').click()`);
+await sleep(500);
+
+/* Sanity: the sweep predicate is not silently matching nothing. */
+const sweepCount = await cdp.evaluate(`[...document.querySelectorAll('button, a')].filter((el) => el.checkVisibility ? el.checkVisibility({opacityProperty:true, visibilityProperty:true}) : true).length`);
+record('目标扫描确实覆盖到元素（非空判）', sweepCount > 15, `扫到 ${sweepCount} 个`);
+
+/* A8 — coarse-pointer sizing. Neither Emulation.setEmulatedMedia's `pointer`
+   feature nor mobile emulation at a desktop width produces a coarse pointer in
+   the headless shell, so assert the stylesheet itself rather than pretend to
+   measure it. This is deterministic in any browser and still fails if the rule
+   is deleted or reverted to a width query. */
+const coarseRule = await cdp.evaluate(`(() => {
+  for (const sheet of document.styleSheets) {
+    let rules;
+    try { rules = sheet.cssRules; } catch { continue; }
+    for (const rule of rules) {
+      if (rule.type !== CSSRule.MEDIA_RULE) continue;
+      if (!/pointer:\\s*coarse/.test(rule.conditionText)) continue;
+      const text = rule.cssText;
+      const usesTap = /var\\(--tap\\)/.test(
+        [...document.styleSheets].flatMap((s) => { try { return [...s.cssRules].map((r) => r.cssText ?? ''); } catch { return []; } }).join(' ')
+      );
+      return { condition: rule.conditionText, usesTap };
+    }
+  }
+  return null;
 })()`);
-record('手机端所有可点目标高度 ≥44px', smallTargets.length === 0, smallTargets.slice(0, 5).join(', '));
-const railPeek = await cdp.evaluate(`(() => {
-  const rail = document.querySelector('.rail');
-  const cur = document.querySelector('.rail-item[aria-current="true"]');
-  if (!rail || !cur) return null;
-  const r = rail.getBoundingClientRect();
-  const c = cur.getBoundingClientRect();
-  return { visible: c.left >= r.left - 1 && c.right <= r.right + 1, snap: getComputedStyle(rail).scrollSnapType };
+record('存在按输入设备判定的粗指针规则', coarseRule !== null, JSON.stringify(coarseRule));
+record('该规则同时覆盖触屏与窄屏', Boolean(coarseRule && /max-width/.test(coarseRule.condition) && /coarse/.test(coarseRule.condition)), coarseRule?.condition);
+const tapToken = await cdp.evaluate(`(() => {
+  const css = [...document.styleSheets].flatMap((s) => { try { return [...s.cssRules].map((r) => r.cssText ?? ''); } catch { return []; } }).join('\\n');
+  return { usesVar: css.includes('var(--tap)'), hardCoded44: (css.match(/min-height: 44px/g) || []).length };
 })()`);
-record('手机上当前块在左栏里可见（自动滚到中间）', railPeek?.visible === true, JSON.stringify(railPeek));
+record('按钮尺寸统一走 --tap 变量，没有残留写死值', tapToken.usesVar === true && tapToken.hardCoded44 === 0, JSON.stringify(tapToken));
 
 /* 10. errors --------------------------------------------------------------- */
 record('全程无 console 报错/异常', cdp.consoleErrors.length === 0, cdp.consoleErrors.slice(0, 3).join(' | '));

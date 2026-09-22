@@ -100,7 +100,7 @@ function railMarkup(activeId) {
     return `
       ${rule}
       <button class="rail-item" type="button" data-open="${block.id}"
-              aria-current="${isCurrent}" title="${pick(block.title)}">
+              ${isCurrent ? 'aria-current="true"' : ''} title="${pick(block.title)}">
         <span class="rail-num">${block.num}</span>
         <span class="rail-title">${pick(block.title)}</span>
       </button>`;
@@ -144,8 +144,10 @@ function galleryMarkup(block) {
 function stageMarkup(block) {
   const ui = t('ui');
   const index = BLOCKS.indexOf(block);
+  const prev = BLOCKS[index - 1];
+  const next = BLOCKS[index + 1];
   const chips = [
-    pick(block.title) ? group(block.section) : '',
+    group(block.section),
     block.meta ? pick(block.meta) : '',
     block.year || '',
   ].filter(Boolean);
@@ -160,10 +162,12 @@ function stageMarkup(block) {
         </button>
         <span class="mono">${block.num} / ${String(BLOCKS.length).padStart(2, '0')}</span>
         <span class="stage-nav">
-          <button class="stage-btn" type="button" data-step="-1" aria-label="${ui.previous}"
-                  ${index === 0 ? 'disabled' : ''}>↑</button>
-          <button class="stage-btn" type="button" data-step="1" aria-label="${ui.next}"
-                  ${index === BLOCKS.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="stage-btn" type="button" data-step="-1"
+                  aria-label="${prev ? ui.prevTo(pick(prev.title)) : ui.previous}"
+                  ${prev ? '' : 'disabled'}>‹</button>
+          <button class="stage-btn" type="button" data-step="1"
+                  aria-label="${next ? ui.nextTo(pick(next.title)) : ui.next}"
+                  ${next ? '' : 'disabled'}>›</button>
           <button class="stage-btn" type="button" data-close aria-label="${ui.close}">✕</button>
         </span>
       </div>
@@ -194,22 +198,137 @@ function stageMarkup(block) {
     </section>`;
 }
 
+/* The phone-only thumb-zone bar. It names the block each button leads to, so
+   moving on never requires going back to the wall first. */
+function sheetBarMarkup(block) {
+  const ui = t('ui');
+  const index = BLOCKS.indexOf(block);
+  const prev = BLOCKS[index - 1];
+  const next = BLOCKS[index + 1];
+
+  const prevCell = prev
+    ? `<button class="bar-cell bar-prev" type="button" data-open="${prev.id}" data-prev
+               aria-label="${ui.prevTo(pick(prev.title))}" title="${pick(prev.title)}">
+         <span aria-hidden="true">‹</span><span>${prev.num}</span>
+       </button>`
+    : '<span class="bar-cell bar-prev" aria-hidden="true"></span>';
+
+  /* No wrapping at the end: silently looping sixteen blocks hides the fact
+     that the reader has reached the bottom of the archive. */
+  const mainCell = next
+    ? `<button class="bar-cell bar-next" type="button" data-open="${next.id}" data-next
+               title="${pick(next.title)}" aria-label="${ui.nextTo(pick(next.title))}">
+         <span class="bar-kicker">${ui.nextWord}</span>
+         <span class="bar-title">${pick(next.title)}</span>
+         <span class="bar-arrow" aria-hidden="true">›</span>
+       </button>`
+    : `<button class="bar-cell bar-next" type="button" data-end="wall">
+         <span class="bar-kicker">${index + 1} / ${BLOCKS.length}</span>
+         <span class="bar-title">${ui.backToWallShort}</span>
+         <span class="bar-arrow" aria-hidden="true">↩</span>
+       </button>`;
+
+  return `
+    <nav class="sheet-bar" aria-label="${ui.rail}">
+      <div class="shell sheet-bar-inner">
+        ${prevCell}
+        ${mainCell}
+        <button class="bar-cell bar-list" type="button" data-open-list
+                aria-controls="rail-list" aria-expanded="false">${ui.listAll}</button>
+      </div>
+    </nav>`;
+}
+
+function railHeadMarkup() {
+  const ui = t('ui');
+  return `
+    <div class="rail-head">
+      <div>
+        <p class="mono">${ui.listAll}</p>
+        <p class="rail-hint">${ui.hintFocus}</p>
+      </div>
+      <button class="rail-done" type="button" data-list-close>${ui.listClose}</button>
+    </div>`;
+}
+
 function renderFocus() {
   const block = byId(state.activeId);
   if (!block) return;
   const ui = t('ui');
-  root.querySelector('.focus').innerHTML = `
+  const sheet = root.querySelector('.focus');
+  /* Stage first in the DOM so Tab runs content → list; on desktop the grid
+     places them the other way round visually, leaving that layout untouched. */
+  sheet.innerHTML = `
+    <p class="sr-only" role="status" aria-live="polite" data-announce></p>
     <div class="shell">
       <div class="focus-inner">
-        <nav class="rail" aria-label="${ui.rail}">${railMarkup(block.id)}</nav>
         <div data-stage-slot>${stageMarkup(block)}</div>
+        <nav class="rail" id="rail-list" aria-label="${ui.rail}">
+          ${railHeadMarkup()}${railMarkup(block.id)}
+        </nav>
       </div>
-    </div>`;
+    </div>
+    ${sheetBarMarkup(block)}
+    <button class="list-backdrop" type="button" data-list-close
+            tabindex="-1" aria-label="${ui.listClose}"></button>`;
+  centreRail();
+}
 
-  /* On phones the rail is a horizontal strip showing four of sixteen blocks;
-     without this the current one is usually off to the right, invisible. */
-  const current = root.querySelector('.rail-item[aria-current="true"]');
-  current?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'instant' });
+/* Swapping a block must not rebuild the list: re-creating it would throw away
+   the reader's place and re-trigger every entrance transition. */
+function renderStageOnly(block) {
+  const slot = root.querySelector('[data-stage-slot]');
+  if (slot) slot.innerHTML = stageMarkup(block);
+}
+
+function updateSheetBar(block) {
+  const bar = root.querySelector('.sheet-bar');
+  if (bar) bar.outerHTML = sheetBarMarkup(block);
+}
+
+function syncRail(id) {
+  root.querySelectorAll('.rail-item[aria-current]').forEach((el) => el.removeAttribute('aria-current'));
+  root.querySelector(`.rail-item[data-open="${id}"]`)?.setAttribute('aria-current', 'true');
+  centreRail();
+}
+
+/* Scrolls the list itself rather than calling scrollIntoView, which would also
+   scroll every scrollable ancestor and jump the reader's place. */
+function centreRail() {
+  const rail = root.querySelector('.rail');
+  const current = rail?.querySelector('.rail-item[aria-current="true"]');
+  if (!current) return;
+  const style = getComputedStyle(rail);
+  const vertical = style.display === 'grid' || style.flexDirection === 'column';
+  if (vertical) {
+    rail.scrollTop = Math.max(0, current.offsetTop - rail.clientHeight / 2 + current.offsetHeight / 2);
+  } else {
+    rail.scrollLeft = Math.max(0, current.offsetLeft - rail.clientWidth / 2 + current.offsetWidth / 2);
+  }
+}
+
+let listOpener = null;
+
+function openList() {
+  if (!state.activeId || document.body.dataset.list === 'open') return;
+  listOpener = document.activeElement;
+  document.body.dataset.list = 'open';
+  centreRail();
+  root.querySelector('[data-open-list]')?.setAttribute('aria-expanded', 'true');
+  /* Making the stage inert keeps Tab inside the drawer without a hand-rolled
+     focus trap. */
+  root.querySelector('.stage')?.setAttribute('inert', '');
+  root.querySelector('.rail-done')?.focus({ preventScroll: true });
+}
+
+function closeList() {
+  if (document.body.dataset.list !== 'open') return;
+  delete document.body.dataset.list;
+  root.querySelector('.stage')?.removeAttribute('inert');
+  root.querySelector('[data-open-list]')?.setAttribute('aria-expanded', 'false');
+  const back = listOpener?.isConnected ? listOpener : root.querySelector('[data-open-list]');
+  back?.focus({ preventScroll: true });
+  listOpener = null;
 }
 
 function renderChrome() {
@@ -244,6 +363,7 @@ function renderChrome() {
               ${site.capabilities.map((cap) => `<li>${cap}</li>`).join('')}
             </ul>
           </div>
+          <p class="hero-hint mono">${ui.hintOpen} ↓</p>
         </div>
       </section>
 
@@ -473,6 +593,8 @@ async function closeBlock({ keepHistory = false } = {}) {
     state.activeId = null;
     state.lightbox = null;
     document.body.dataset.mode = 'wall';
+    delete document.body.dataset.list;
+    resume.clear();
     root.querySelector('.focus').innerHTML = '';
     if (!keepHistory) history.replaceState(null, '', location.pathname + location.search);
 
@@ -506,21 +628,43 @@ function step(delta) {
   const index = BLOCKS.indexOf(byId(state.activeId));
   const next = index + delta;
   if (next < 0 || next >= BLOCKS.length) return;
-  openFromRail(BLOCKS[next].id);
+  switchBlock(BLOCKS[next].id);
 }
 
-async function openFromRail(id) {
-  if (busy || id === state.activeId) return;
+/* Where the reader stopped on each block, for this visit only. Carrying one
+   block's offset straight across would drop a reader past the end of a shorter
+   block, so this is a per-block memory rather than a shared scroll value. */
+const resume = new Map();
+
+async function switchBlock(id) {
+  if (busy || !state.activeId || id === state.activeId) return;
+  const block = byId(id);
+  if (!block) return;
+
+  const sheet = root.querySelector('.focus');
+  if (sheet && sheet.scrollTop > 0) resume.set(state.activeId, sheet.scrollTop);
+  if (document.body.dataset.list === 'open') closeList();
+
   busy = true;
   state.activeId = id;
   state.lightbox = null;
-  renderFocus();
-  /* Swapping inside an open sheet replaces the entry rather than stacking one
-     per block, so Back leaves the sheet instead of walking the whole rail. */
+  renderStageOnly(block);
+  updateSheetBar(block);
+  syncRail(id);
+  /* Replacing rather than pushing keeps Back leaving the sheet instead of
+     walking back through every block visited. */
   history.replaceState({ pandaBlock: id }, '', `#/b/${id}`);
-  const sheet = root.querySelector('.focus');
-  if (sheet) sheet.scrollTop = 0;
-  root.querySelector('.stage')?.focus({ preventScroll: true });
+
+  if (sheet) {
+    const limit = Math.max(0, sheet.scrollHeight - sheet.clientHeight);
+    sheet.scrollTop = Math.min(resume.get(id) ?? 0, limit);
+  }
+
+  const stage = root.querySelector('.stage');
+  stage?.focus({ preventScroll: true });
+  const announce = root.querySelector('[data-announce]');
+  if (announce) announce.textContent = t('ui').announced(block.num, BLOCKS.length, pick(block.title));
+
   await wait(40);
   busy = false;
 }
@@ -545,6 +689,9 @@ function openLightbox(index) {
     root.appendChild(overlay);
   }
   overlay.setAttribute('aria-label', `${ui.gallery}: ${pick(block.title)}`);
+  /* The lightbox lives on #app, outside .focus, so making the sheet inert
+     traps Tab here without a hand-written key handler. */
+  root.querySelector('.focus')?.setAttribute('inert', '');
   overlay.innerHTML = `
     <div class="lightbox-bar">
       <span class="mono">${pick(block.title)}</span>
@@ -567,13 +714,22 @@ function closeLightbox() {
   state.lightbox = null;
   delete document.body.dataset.lightbox;
   root.querySelector('.lightbox')?.remove();
+  root.querySelector('.focus')?.removeAttribute('inert');
   root.querySelector('.gallery-item')?.focus({ preventScroll: true });
 }
 
 /* -------------------------------------------------------------- event wiring */
 
 root.addEventListener('click', (event) => {
+  if (event.target.closest('[data-list-close]')) return closeList();
   if (event.target.closest('[data-close]')) return requestClose();
+  if (event.target.closest('[data-open-list]')) return openList();
+  if (event.target.closest('[data-end]')) return requestClose();
+
+  /* The step buttons were rendered but never wired — clicking them did
+     nothing until this branch existed. */
+  const stepper = event.target.closest('[data-step]');
+  if (stepper) return step(Number(stepper.dataset.step));
 
   const shot = event.target.closest('[data-shot]');
   if (shot) return openLightbox(Number(shot.dataset.shot));
@@ -588,8 +744,10 @@ root.addEventListener('click', (event) => {
 
   const id = opener.dataset.open;
   if (document.body.dataset.mode === 'focus') {
-    if (id === state.activeId) requestClose();
-    else openFromRail(id);
+    /* Tapping the block you are already on dismisses the list — it must not
+       close the whole detail sheet out from under a thumb. */
+    if (id === state.activeId) closeList();
+    else switchBlock(id);
   } else {
     openBlock(id, opener);
   }
@@ -598,6 +756,7 @@ root.addEventListener('click', (event) => {
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     if (state.lightbox !== null) closeLightbox();
+    else if (document.body.dataset.list === 'open') closeList();
     else if (state.activeId) requestClose();
     return;
   }
@@ -609,11 +768,15 @@ document.addEventListener('keydown', (event) => {
   }
 
   if (state.activeId) {
-    if (event.key === 'ArrowDown') {
+    /* While the list is open the arrow keys belong to the list's own scroll. */
+    if (document.body.dataset.list === 'open') return;
+    /* Stepping is horizontal — the list reads left to right — which frees
+       ArrowUp/ArrowDown for native scrolling, as they were before. */
+    if (event.key === 'ArrowRight') {
       event.preventDefault();
       step(1);
     }
-    if (event.key === 'ArrowUp') {
+    if (event.key === 'ArrowLeft') {
       event.preventDefault();
       step(-1);
     }
