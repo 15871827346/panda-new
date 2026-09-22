@@ -87,7 +87,7 @@ ol {
 
 .mono {
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.02em;
 }
 
@@ -185,7 +185,7 @@ ol {
   border: var(--bw) solid var(--ink);
   background: var(--paper);
   font-family: var(--sans);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .header-tools a:hover,
@@ -244,7 +244,7 @@ ol {
   margin: 0;
   /* The slogan is one long Latin line; the minimum has to fit a 320px screen
      and the bottom padding keeps descenders (g, y) off the rule below. */
-  font-size: clamp(31px, 9.1vw, 148px);
+  font-size: clamp(31px, 9.1vw, 128px);
   font-weight: 700;
   line-height: 0.92;
   letter-spacing: -0.045em;
@@ -270,7 +270,7 @@ ol {
   margin: 0;
   max-width: 52ch;
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.8;
   color: var(--ink-soft);
 }
@@ -286,7 +286,7 @@ ol {
   border: var(--bw) solid var(--ink);
   background: var(--paper);
   font-family: var(--sans);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 /* -------------------------------------------------------------------- walls */
@@ -321,7 +321,7 @@ body[data-mode="focus"] .hero {
   background: var(--ink);
   color: var(--paper);
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.06em;
 }
 
@@ -329,12 +329,13 @@ body[data-mode="focus"] .hero {
   padding-top: clamp(30px, 3.6vw, 54px);
 }
 
+/* Heading and its explainer stacked at the left edge. They used to sit at
+   opposite ends of a 1400px row, which forced a long eye travel back to the
+   start of the wall; reading order now runs straight down. */
 .section-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px 28px;
+  display: grid;
+  gap: 12px;
+  justify-items: start;
   margin-bottom: clamp(22px, 2.6vw, 38px);
 }
 
@@ -399,7 +400,7 @@ body[data-mode="focus"] .hero {
   background: var(--ink);
   color: var(--paper);
   font-family: var(--sans);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.04em;
 }
 
@@ -503,7 +504,7 @@ body[data-mode="focus"] .hero {
   padding-top: 10px;
   border-top: 1px solid var(--ink);
   font-family: var(--sans);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-soft);
 }
 
@@ -579,12 +580,12 @@ body[data-mode="focus"] .focus {
 }
 
 .rail-num {
-  font-size: 10px;
+  font-size: 12px;
   opacity: 0.7;
 }
 
 .rail-title {
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
@@ -600,7 +601,7 @@ body[data-mode="focus"] .focus {
   background: var(--ink);
   color: var(--paper);
   font-family: var(--sans);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.06em;
 }
 
@@ -621,7 +622,7 @@ body[data-mode="focus"] .focus {
   background: var(--ink);
   color: var(--paper);
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ghost {
@@ -630,7 +631,7 @@ body[data-mode="focus"] .focus {
   gap: 7px;
   padding: 2px 4px;
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--paper);
   opacity: 0.75;
   transition: opacity 140ms var(--ease);
@@ -660,7 +661,7 @@ body[data-mode="focus"] .focus {
   padding: 0 4px;
   border: 1px solid var(--paper);
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
   color: var(--paper);
   transition:
@@ -717,7 +718,7 @@ body[data-mode="focus"] .focus {
 
 .stage-title {
   margin: 0;
-  font-size: clamp(30px, 4.4vw, 60px);
+  font-size: clamp(30px, 4.4vw, 56px);
   font-weight: 700;
   line-height: 0.94;
   letter-spacing: -0.042em;
@@ -734,7 +735,7 @@ body[data-mode="focus"] .focus {
   border: var(--bw) solid var(--ink);
   background: var(--panel);
   font-family: var(--sans);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .prose {
@@ -746,7 +747,7 @@ body[data-mode="focus"] .focus {
 
 .prose p {
   margin: 0;
-  font-size: 15.5px;
+  font-size: 15px;
   line-height: 1.85;
   color: var(--ink-soft);
 }
@@ -779,7 +780,7 @@ body[data-mode="focus"] .focus {
   counter-increment: item;
   content: counter(item, decimal-leading-zero);
   font-family: var(--sans);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--ink-faint);
 }
 
@@ -800,7 +801,7 @@ body[data-mode="focus"] .focus {
   justify-content: space-between;
   gap: 12px;
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .gallery-grid {
@@ -878,7 +879,7 @@ body[data-mode="focus"] .focus {
   background: var(--ink);
   color: var(--paper);
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .lightbox-bar .ghost {
