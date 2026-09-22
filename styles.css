@@ -23,11 +23,11 @@
   --speed: 460ms;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
-  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
-    sans-serif;
-  --mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas,
-    "Liberation Mono", monospace;
+  /* Arial supplies every Latin glyph; the browser then falls through to a
+     heiti per character for CJK. SimHei is the literal 黑体 — if you would
+     rather have 微软雅黑's cleaner bold, swap the two. */
+  --sans: Arial, SimHei, "Microsoft YaHei", "Heiti SC", "PingFang SC",
+    "Hiragino Sans GB", "Source Han Sans SC", "Noto Sans CJK SC", sans-serif;
 }
 
 *,
@@ -86,7 +86,7 @@ ol {
 }
 
 .mono {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 11px;
   letter-spacing: 0.02em;
 }
@@ -167,7 +167,7 @@ ol {
 }
 
 .brand-name {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -184,7 +184,7 @@ ol {
   padding: 5px 11px;
   border: var(--bw) solid var(--ink);
   background: var(--paper);
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 11.5px;
 }
 
@@ -269,9 +269,9 @@ ol {
 .hero-notes p {
   margin: 0;
   max-width: 52ch;
-  font-family: var(--mono);
-  font-size: 13px;
-  line-height: 1.7;
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.8;
   color: var(--ink-soft);
 }
 
@@ -282,11 +282,11 @@ ol {
 }
 
 .caps li {
-  padding: 4px 9px;
+  padding: 4px 10px;
   border: var(--bw) solid var(--ink);
   background: var(--paper);
-  font-family: var(--mono);
-  font-size: 10.5px;
+  font-family: var(--sans);
+  font-size: 11.5px;
 }
 
 /* -------------------------------------------------------------------- walls */
@@ -320,7 +320,7 @@ body[data-mode="focus"] .hero {
   border-bottom: var(--bw) solid var(--ink);
   background: var(--ink);
   color: var(--paper);
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 11px;
   letter-spacing: 0.06em;
 }
@@ -352,9 +352,9 @@ body[data-mode="focus"] .hero {
 .section-head .hint {
   max-width: 40ch;
   margin: 0;
-  font-family: var(--mono);
-  font-size: 12px;
-  line-height: 1.65;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.75;
 }
 
 .grid {
@@ -398,9 +398,9 @@ body[data-mode="focus"] .hero {
   padding: 4px 8px;
   background: var(--ink);
   color: var(--paper);
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.01em;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
 }
 
 .tile-bar b {
@@ -482,9 +482,10 @@ body[data-mode="focus"] .hero {
 }
 
 .tile-summary {
-  font-family: var(--mono);
-  font-size: 11.5px;
-  line-height: 1.62;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink-soft);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -501,8 +502,8 @@ body[data-mode="focus"] .hero {
   margin-top: auto;
   padding-top: 10px;
   border-top: 1px solid var(--ink);
-  font-family: var(--mono);
-  font-size: 10px;
+  font-family: var(--sans);
+  font-size: 11.5px;
   color: var(--ink-soft);
 }
 
@@ -559,7 +560,7 @@ body[data-mode="focus"] .focus {
   width: 168px;
   padding: 7px 9px;
   text-align: left;
-  font-family: var(--mono);
+  font-family: var(--sans);
   border: var(--bw) solid var(--ink);
   background: var(--panel);
   transition:
@@ -583,8 +584,8 @@ body[data-mode="focus"] .focus {
 }
 
 .rail-title {
-  font-size: 11.5px;
-  line-height: 1.3;
+  font-size: 12.5px;
+  line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -598,7 +599,7 @@ body[data-mode="focus"] .focus {
   border: var(--bw) solid var(--ink);
   background: var(--ink);
   color: var(--paper);
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 10px;
   letter-spacing: 0.06em;
 }
@@ -619,7 +620,7 @@ body[data-mode="focus"] .focus {
   border: var(--bw) solid var(--ink);
   background: var(--ink);
   color: var(--paper);
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 11px;
 }
 
@@ -628,7 +629,7 @@ body[data-mode="focus"] .focus {
   align-items: center;
   gap: 7px;
   padding: 2px 4px;
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 11px;
   color: var(--paper);
   opacity: 0.75;
@@ -658,7 +659,7 @@ body[data-mode="focus"] .focus {
   height: 18px;
   padding: 0 4px;
   border: 1px solid var(--paper);
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 11px;
   line-height: 1;
   color: var(--paper);
@@ -729,11 +730,11 @@ body[data-mode="focus"] .focus {
 }
 
 .chips li {
-  padding: 3px 8px;
+  padding: 3px 9px;
   border: var(--bw) solid var(--ink);
   background: var(--panel);
-  font-family: var(--mono);
-  font-size: 10.5px;
+  font-family: var(--sans);
+  font-size: 11.5px;
 }
 
 .prose {
@@ -745,8 +746,8 @@ body[data-mode="focus"] .focus {
 
 .prose p {
   margin: 0;
-  font-size: 14.5px;
-  line-height: 1.8;
+  font-size: 15.5px;
+  line-height: 1.85;
   color: var(--ink-soft);
 }
 
@@ -770,14 +771,14 @@ body[data-mode="focus"] .focus {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-family: var(--mono);
-  font-size: 12px;
+  font-family: var(--sans);
+  font-size: 13px;
 }
 
 .items li::before {
   counter-increment: item;
   content: counter(item, decimal-leading-zero);
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 10px;
   color: var(--ink-faint);
 }
@@ -798,7 +799,7 @@ body[data-mode="focus"] .focus {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 11px;
 }
 
@@ -876,7 +877,7 @@ body[data-mode="focus"] .focus {
   border-bottom: var(--bw) solid var(--ink);
   background: var(--ink);
   color: var(--paper);
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 11px;
 }
 
@@ -909,7 +910,7 @@ body[data-mode="focus"] .focus {
   height: 40px;
   border: var(--bw) solid var(--ink);
   background: var(--paper);
-  font-family: var(--mono);
+  font-family: var(--sans);
   transition: background-color 140ms var(--ease);
 }
 
@@ -946,7 +947,7 @@ body[data-mode="focus"] .focus {
 
 .site-footer p {
   margin: 0;
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 12px;
   color: var(--ink);
 }
@@ -1008,6 +1009,33 @@ body[data-mode="focus"] .focus {
   .grid[data-cols='4'] {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+}
+
+/* ---------------------------------------------------------------- 中文排版 */
+
+/* The negative tracking and sub-1 line-heights used above are Latin display
+   settings. Full-width Hanzi need neither: negative tracking makes adjacent
+   glyphs touch, and a line-height below 1 makes a two-line Chinese heading
+   collide. The hero slogan and the footer wordmark are Latin in both locales,
+   so they keep their tight display settings. */
+html[lang="zh-CN"] .section-head h2,
+html[lang="zh-CN"] .stage-title {
+  line-height: 1.24;
+  letter-spacing: 0.01em;
+}
+
+html[lang="zh-CN"] .tile-title {
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+/* Punctuation comes from the heiti while Latin comes from Arial; a hair of
+   tracking keeps dense Chinese runs from closing up. */
+html[lang="zh-CN"] .prose p,
+html[lang="zh-CN"] .hero-notes p,
+html[lang="zh-CN"] .section-head .hint,
+html[lang="zh-CN"] .tile-summary {
+  letter-spacing: 0.01em;
 }
 
 @media (prefers-reduced-motion: reduce) {
