@@ -62,24 +62,24 @@ function wallMarkup() {
   const sections = [
     /* Nine index blocks tile perfectly into three columns; seven records fill
        four, so neither band ends with an orphan. */
-    ['index', BLOCKS.filter((b) => b.group === 'index'), '3', 'pink'],
-    ['record', BLOCKS.filter((b) => b.group === 'record'), '4', ''],
+    ['index', BLOCKS.filter((b) => b.group === 'index'), '3'],
+    ['record', BLOCKS.filter((b) => b.group === 'record'), '4'],
   ];
 
   return sections
-    .map(([key, blocks, cols, field]) => {
+    .map(([key, blocks, cols]) => {
       const section = t('sections')[key === 'index' ? 'index' : 'record'];
       return `
         <section class="section" id="${key === 'index' ? 'intro' : 'records'}"
-                 ${field ? `data-field="${field}"` : ''}
                  aria-labelledby="section-${key}">
           <div class="marks" aria-hidden="true">${MARKS}</div>
+          <div class="section-bar">
+            <span>${section.label}</span>
+            <span>${String(blocks.length).padStart(2, '0')} ${t('ui').blockUnit}</span>
+          </div>
           <div class="shell">
             <div class="section-head">
-              <div>
-                <p class="mono">${section.label}</p>
-                <h2 id="section-${key}">${section.title}</h2>
-              </div>
+              <h2 id="section-${key}">${section.title}</h2>
               <p class="hint">${section.hint}</p>
             </div>
             <div class="grid" data-cols="${cols}" role="group" aria-label="${t('ui').grid}">
@@ -283,12 +283,14 @@ const BAYER = [
   [63, 31, 55, 23, 61, 29, 53, 21],
 ];
 
+/* Neutral ramp: the same luminance shape as the original band, with the hue
+   removed so nothing on the page is coloured. */
 const CLOUD_STOPS = [
-  [0, [254, 254, 254]],
-  [0.34, [217, 239, 255]],
-  [0.58, [255, 118, 253]],
-  [0.78, [243, 134, 161]],
-  [1, [254, 254, 254]],
+  [0, [253, 253, 253]],
+  [0.32, [231, 231, 231]],
+  [0.56, [138, 138, 138]],
+  [0.78, [176, 176, 176]],
+  [1, [253, 253, 253]],
 ];
 
 function paintCloud() {
@@ -314,9 +316,9 @@ function paintCloud() {
 
   /* Break the ramp up with a couple of soft lobes before dithering. */
   for (const [cx, cy, radius, tint] of [
-    [0.26, 0.42, 0.42, 'rgba(255,82,252,0.85)'],
-    [0.68, 0.58, 0.36, 'rgba(243,134,161,0.8)'],
-    [0.48, 0.2, 0.3, 'rgba(217,239,255,0.75)'],
+    [0.26, 0.42, 0.42, 'rgba(40,40,40,0.55)'],
+    [0.68, 0.58, 0.36, 'rgba(255,255,255,0.6)'],
+    [0.48, 0.2, 0.3, 'rgba(90,90,90,0.35)'],
   ]) {
     const blob = ctx.createRadialGradient(
       cx * width, cy * height, 0,

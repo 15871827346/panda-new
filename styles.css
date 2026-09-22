@@ -1,12 +1,10 @@
 /* ---------------------------------------------------------------------------
-   Panda Studio — block index, typesafe.ai treatment.
+   Panda Studio — block index, typesafe.ai treatment, monochrome.
 
-   Colours sampled pixel-wise from a full-page capture of typesafe.ai:
-     base #fefefe   ink #1e1e1e (soft black, never pure)   panel #dedede
-     pink field #f386a1   sage field #abbab9
-   Language: hard 1.5px ink borders, Win95 panels with black title bars,
-   monospace inside panels, giant tight display type, corner crop marks,
-   solid-ink buttons, one dithered colour field, an inverted black footer.
+   The structure is typesafe's — Win95 windows, hard rules, corner marks,
+   giant tight display type — but the colour fields were taken out at the
+   client's request. Everything now sits on white; the only tones are paper
+   #fefefe, window grey #dedede and ink #1e1e1e.
 --------------------------------------------------------------------------- */
 
 :root {
@@ -15,12 +13,12 @@
   --ink-soft: #4a4a4a;
   --ink-faint: #7d7d7d;
   --panel: #dedede;
-  --pink: #f386a1;
 
   --pad: clamp(18px, 3.4vw, 54px);
   --rail: 244px;
   --gap: clamp(10px, 1.1vw, 16px);
   --bw: 1.5px;
+  --bar: 34px;
   --shadow: 5px 5px 0 var(--ink);
   --speed: 460ms;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -117,7 +115,8 @@ ol {
    then stay correct at any size. */
 .marks {
   position: absolute;
-  inset: 12px;
+  /* Start below the ink strip, or the top marks would be black on black. */
+  inset: calc(var(--bar) + 12px) 12px 12px;
   pointer-events: none;
 }
 
@@ -304,13 +303,30 @@ body[data-mode="focus"] .hero {
 
 .section {
   position: relative;
-  padding: clamp(40px, 5vw, 76px) 0;
+  padding-bottom: clamp(40px, 5vw, 76px);
   border-bottom: var(--bw) solid var(--ink);
   background: var(--paper);
 }
 
-.section[data-field='pink'] {
-  background: var(--pink);
+/* With the colour fields gone, a full-width ink strip opens each band. It does
+   the same job the pink did — say "this is a new section" — in black and
+   white only. */
+.section-bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px var(--pad);
+  border-bottom: var(--bw) solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.section .shell {
+  padding-top: clamp(30px, 3.6vw, 54px);
 }
 
 .section-head {
@@ -323,7 +339,7 @@ body[data-mode="focus"] .hero {
 }
 
 .section-head h2 {
-  margin: 6px 0 0;
+  margin: 0;
   max-width: 18ch;
   font-size: clamp(28px, 5vw, 64px);
   font-weight: 700;
@@ -908,10 +924,11 @@ body[data-mode="focus"] .focus {
 
 /* ------------------------------------------------------------------- footer */
 
-/* Inverted, like the closing block on typesafe.ai. */
+/* White, closed off with heavy rules — the page never turns colour. */
 .site-footer {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--paper);
+  color: var(--ink);
+  border-top: var(--bw) solid var(--ink);
   padding: clamp(34px, 4.4vw, 66px) 0;
 }
 
@@ -931,7 +948,7 @@ body[data-mode="focus"] .focus {
   margin: 0;
   font-family: var(--mono);
   font-size: 12px;
-  color: var(--paper);
+  color: var(--ink);
 }
 
 .footer-row {
@@ -941,7 +958,7 @@ body[data-mode="focus"] .focus {
   justify-content: space-between;
   gap: 10px 24px;
   padding-top: 16px;
-  border-top: var(--bw) solid var(--paper);
+  border-top: 1px solid var(--ink);
 }
 
 .site-footer a:hover {
