@@ -178,11 +178,11 @@ const SCENARIOS = [
     click: '.tile[data-open="hardware-robot-arm"]',
   },
   {
-    name: 'wall-en-desktop',
-    width: 1440,
+    /* Just past the 4-column breakpoint. */
+    name: 'wall-laptop',
+    width: 1180,
     height: 900,
-    fullPage: true,
-    url: `${BASE}?lang=en`,
+    url: BASE,
   },
   {
     name: 'focus-mobile',

@@ -179,8 +179,7 @@ ol {
   gap: 8px;
 }
 
-.header-tools a,
-.lang button {
+.header-tools a {
   padding: 5px 11px;
   border: var(--bw) solid var(--ink);
   background: var(--paper);
@@ -188,28 +187,8 @@ ol {
   font-size: 12px;
 }
 
-.header-tools a:hover,
-.lang button:hover {
+.header-tools a:hover {
   background: var(--panel);
-}
-
-.lang {
-  display: inline-flex;
-  border: var(--bw) solid var(--ink);
-}
-
-.lang button {
-  border: 0;
-  color: var(--ink-faint);
-}
-
-.lang button + button {
-  border-left: var(--bw) solid var(--ink);
-}
-
-.lang button[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--paper);
 }
 
 /* --------------------------------------------------------------------- hero */

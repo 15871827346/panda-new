@@ -9,23 +9,21 @@
 
 import { BLOCKS, SITE, groupLabel } from './data.js';
 
-const LOCALE_KEY = 'panda.locale';
 const SPEED = 460;
 
+/* Chinese only. The block data still carries its English strings, but nothing
+   reads them and there is no way to switch — see data.js if that copy is ever
+   wanted back. */
 const state = {
-  locale: localStorage.getItem(LOCALE_KEY) === 'en' ? 'en' : 'zh',
   activeId: null,
   lightbox: null,
 };
 
 const root = document.getElementById('app');
 
-/* ?lang=en is a convenience for screenshots and for linking a specific
-   language; a stored preference still wins on the next visit. */
-const urlLang = new URLSearchParams(location.search).get('lang');
-state.locale = urlLang === 'en' || urlLang === 'zh' ? urlLang : state.locale;
-const t = (key) => SITE[state.locale][key];
-const pick = (field) => (typeof field === 'object' ? field[state.locale] : field);
+const t = (key) => SITE.zh[key];
+const pick = (field) => (typeof field === 'object' ? field.zh : field);
+const group = (section) => groupLabel(section, 'zh');
 const img = (slug, kind = 'lg') => `assets/${slug}${kind === 'sm' ? '.thumb' : ''}.webp`;
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const byId = (id) => BLOCKS.find((block) => block.id === id);
@@ -33,7 +31,6 @@ const byId = (id) => BLOCKS.find((block) => block.id === id);
 /* ------------------------------------------------------------------ markup */
 
 function tileMarkup(block) {
-  const group = groupLabel(block.section, state.locale);
   return `
     <button class="tile" type="button" data-open="${block.id}"
             aria-label="${t('ui').expand(pick(block.title))}">
@@ -49,7 +46,7 @@ function tileMarkup(block) {
         <span class="tile-title">${pick(block.title)}</span>
         <span class="tile-summary">${pick(block.summary)}</span>
         <span class="tile-foot">
-          <span>${group}</span>
+          <span>${group(block.section)}</span>
           <em>${t('ui').open} →</em>
         </span>
       </span>
@@ -97,7 +94,7 @@ function railMarkup(activeId) {
     const isCurrent = block.id === activeId;
     const rule =
       block.section !== lastSection
-        ? `<p class="rail-rule">${groupLabel(block.section, state.locale)}</p>`
+        ? `<p class="rail-rule">${group(block.section)}</p>`
         : '';
     lastSection = block.section;
     return `
@@ -148,7 +145,7 @@ function stageMarkup(block) {
   const ui = t('ui');
   const index = BLOCKS.indexOf(block);
   const chips = [
-    pick(block.title) ? groupLabel(block.section, state.locale) : '',
+    pick(block.title) ? group(block.section) : '',
     block.meta ? pick(block.meta) : '',
     block.year || '',
   ].filter(Boolean);
@@ -211,7 +208,7 @@ function renderFocus() {
 }
 
 function renderChrome() {
-  const site = SITE[state.locale];
+  const site = SITE.zh;
   const ui = site.ui;
 
   root.innerHTML = `
@@ -224,10 +221,6 @@ function renderChrome() {
         <div class="header-tools">
           <a href="#intro">${site.nav.index}</a>
           <a href="#records">${site.nav.record}</a>
-          <div class="lang" role="group" aria-label="${state.locale === 'zh' ? '切换语言' : 'Switch language'}">
-            <button type="button" data-lang="zh" aria-pressed="${state.locale === 'zh'}">中</button>
-            <button type="button" data-lang="en" aria-pressed="${state.locale === 'en'}">EN</button>
-          </div>
         </div>
       </div>
     </header>
@@ -242,7 +235,7 @@ function renderChrome() {
           </div>
           <div class="hero-notes">
             <p>${site.description}</p>
-            <ul class="caps" aria-label="${state.locale === 'zh' ? '共同能力' : 'Shared capabilities'}">
+            <ul class="caps" aria-label="共同能力">
               ${site.capabilities.map((cap) => `<li>${cap}</li>`).join('')}
             </ul>
           </div>
@@ -546,18 +539,6 @@ function closeLightbox() {
 /* -------------------------------------------------------------- event wiring */
 
 root.addEventListener('click', (event) => {
-  const lang = event.target.closest('[data-lang]');
-  if (lang) {
-    state.locale = lang.dataset.lang;
-    localStorage.setItem(LOCALE_KEY, state.locale);
-    renderChrome();
-    if (state.activeId) {
-      document.body.dataset.mode = 'focus';
-      renderFocus();
-    }
-    return;
-  }
-
   if (event.target.closest('[data-close]')) return closeBlock();
 
   const shot = event.target.closest('[data-shot]');
@@ -647,7 +628,7 @@ window.addEventListener('hashchange', () => {
 
 /* --------------------------------------------------------------- boot */
 
-document.documentElement.lang = state.locale === 'zh' ? 'zh-CN' : 'en';
+document.documentElement.lang = 'zh-CN';
 renderChrome();
 syncFromHash();
 

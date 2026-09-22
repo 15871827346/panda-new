@@ -204,13 +204,17 @@ await sleep(1600);
 s = await probe();
 record('直接带 # 打开即进放大态', s.mode === 'focus' && s.title === 'MR 设备', `title=${s.title}`);
 
-/* 8. language switch ------------------------------------------------------- */
-await cdp.click('[data-lang="en"]');
-s = await probe();
-record('切换英文后内容跟随', s.title === 'MR devices', `title=${s.title}`);
-record('英文下仍是放大态', s.mode === 'focus');
-const enTiles = await cdp.evaluate('document.querySelectorAll(".tile").length');
-record('英文方块墙同为 16 块', enTiles === 16);
+/* 8. Chinese only ---------------------------------------------------------- */
+const langButtons = await cdp.evaluate('document.querySelectorAll("[data-lang]").length');
+record('顶栏已无中英文切换', langButtons === 0, `切换按钮 ${langButtons} 个`);
+const langWidget = await cdp.evaluate('document.querySelectorAll(".lang").length');
+record('切换控件整体移除', langWidget === 0);
+record('文档语言为 zh-CN', (await cdp.evaluate('document.documentElement.lang')) === 'zh-CN');
+const latinLeak = await cdp.evaluate(`(() => {
+  const text = document.querySelector('.site-header').innerText + document.querySelector('.hero').innerText;
+  return /\\b(the|and|of|Studio introduction)\\b/i.test(text) ? text.slice(0, 60) : '';
+})()`);
+record('首屏无残留英文文案', latinLeak === '', latinLeak);
 
 /* 9. errors ---------------------------------------------------------------- */
 record('全程无 console 报错/异常', cdp.consoleErrors.length === 0, cdp.consoleErrors.slice(0, 3).join(' | '));
