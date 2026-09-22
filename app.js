@@ -37,14 +37,18 @@ function tileMarkup(block) {
   return `
     <button class="tile" type="button" data-open="${block.id}"
             aria-label="${t('ui').expand(pick(block.title))}">
+      <span class="tile-bar">
+        <b>${pick(block.code)}</b>
+        <span aria-hidden="true">▪</span>
+      </span>
       <span class="tile-media">
         <img src="${img(block.img, 'sm')}" alt="" loading="lazy" decoding="async" />
         <span class="tile-plus" aria-hidden="true">＋</span>
       </span>
       <span class="tile-body">
         <span class="tile-top">
-          <span>${block.num}</span>
           <span>${group}</span>
+          <span>${block.num}</span>
         </span>
         <span class="tile-title">${pick(block.title)}</span>
         <span class="tile-summary">${pick(block.summary)}</span>
@@ -52,20 +56,26 @@ function tileMarkup(block) {
     </button>`;
 }
 
+const CORNERS = ['⌐', '¬', 'L', '⌐'];
+
 function wallMarkup() {
   const sections = [
     /* Nine index blocks tile perfectly into three columns; seven records fill
        four, so neither band ends with an orphan. */
-    ['index', BLOCKS.filter((b) => b.group === 'index'), '3'],
-    ['record', BLOCKS.filter((b) => b.group === 'record'), '4'],
+    ['index', BLOCKS.filter((b) => b.group === 'index'), '3', 'pink'],
+    ['record', BLOCKS.filter((b) => b.group === 'record'), '4', 'paper'],
   ];
 
   return sections
-    .map(([key, blocks, cols]) => {
+    .map(([key, blocks, cols, field]) => {
       const section = t('sections')[key === 'index' ? 'index' : 'record'];
       return `
         <section class="section" id="${key === 'index' ? 'intro' : 'records'}"
+                 data-field="${field === 'paper' ? '' : field}"
                  aria-labelledby="section-${key}">
+          <div class="marks" aria-hidden="true">
+            ${CORNERS.map((glyph) => `<span>${glyph}</span>`).join('')}
+          </div>
           <div class="shell">
             <div class="section-head">
               <div>
@@ -156,27 +166,29 @@ function stageMarkup(block) {
         </span>
       </div>
 
-      <div class="stage-grid">
-        <figure class="stage-media" data-stage-media>
-          <img src="${img(block.img)}" alt="${pick(block.title)}" decoding="async" />
-        </figure>
-        <div class="stage-body">
-          <p class="mono">${pick(block.code)}</p>
-          <h2 class="stage-title">${pick(block.title)}</h2>
-          ${chips.length ? `<ul class="chips">${chips.map((c) => `<li>${c}</li>`).join('')}</ul>` : ''}
-          <div class="prose">${paragraphs(pick(block.body))}</div>
-          ${
-            items.length
-              ? `<div class="items">
-                   <p class="mono">${ui.highlights}</p>
-                   <ol>${items.map((item) => `<li>${item}</li>`).join('')}</ol>
-                 </div>`
-              : ''
-          }
+      <div class="stage-frame">
+        <div class="stage-grid">
+          <figure class="stage-media" data-stage-media>
+            <img src="${img(block.img)}" alt="${pick(block.title)}" decoding="async" />
+          </figure>
+          <div class="stage-body">
+            <p class="mono">${pick(block.code)}</p>
+            <h2 class="stage-title">${pick(block.title)}</h2>
+            ${chips.length ? `<ul class="chips">${chips.map((c) => `<li>${c}</li>`).join('')}</ul>` : ''}
+            <div class="prose">${paragraphs(pick(block.body))}</div>
+            ${
+              items.length
+                ? `<div class="items">
+                     <p class="mono">${ui.highlights}</p>
+                     <ol>${items.map((item) => `<li>${item}</li>`).join('')}</ol>
+                   </div>`
+                : ''
+            }
+          </div>
         </div>
-      </div>
 
-      ${galleryMarkup(block)}
+        ${galleryMarkup(block)}
+      </div>
     </section>`;
 }
 
@@ -202,20 +214,27 @@ function renderChrome() {
       <div class="shell">
         <a class="brand" href="#top" aria-label="${ui.brandHome}">
           <img src="assets/brand-icon.webp" alt="" />
-          <span class="brand-name">panda <span>studio</span></span>
+          <span class="brand-name">panda studio</span>
         </a>
-        <div class="lang" role="group" aria-label="${state.locale === 'zh' ? '切换语言' : 'Switch language'}">
-          <button type="button" data-lang="zh" aria-pressed="${state.locale === 'zh'}">中</button>
-          <button type="button" data-lang="en" aria-pressed="${state.locale === 'en'}">EN</button>
+        <div class="header-tools">
+          <a href="#intro">${site.nav.index}</a>
+          <a href="#records">${site.nav.record}</a>
+          <div class="lang" role="group" aria-label="${state.locale === 'zh' ? '切换语言' : 'Switch language'}">
+            <button type="button" data-lang="zh" aria-pressed="${state.locale === 'zh'}">中</button>
+            <button type="button" data-lang="en" aria-pressed="${state.locale === 'en'}">EN</button>
+          </div>
         </div>
       </div>
     </header>
 
     <main id="top">
       <section class="hero">
+        <canvas class="hero-cloud" aria-hidden="true"></canvas>
         <div class="shell">
-          <p class="mono">${site.eyebrow}</p>
-          <h1>${site.title.map((line) => `<span>${line}</span>`).join('')}</h1>
+          <div class="hero-copy">
+            <p class="mono">${site.eyebrow}</p>
+            <h1>${site.title.map((line) => `<span>${line}</span>`).join('')}</h1>
+          </div>
           <div class="hero-notes">
             <p>${site.description}</p>
             <ul class="caps" aria-label="${state.locale === 'zh' ? '共同能力' : 'Shared capabilities'}">
@@ -232,11 +251,96 @@ function renderChrome() {
 
     <footer class="site-footer">
       <div class="shell">
-        <p>${site.footer.tagline}</p>
-        <p class="mono">© 2026 PANDA STUDIO</p>
-        <a href="#top">${site.footer.backToTop}</a>
+        <p class="footer-mark">panda studio</p>
+        <div class="footer-row">
+          <p>${site.footer.tagline}</p>
+          <p>© 2026 PANDA STUDIO</p>
+          <a href="#top">${site.footer.backToTop}</a>
+        </div>
       </div>
     </footer>`;
+
+  paintCloud();
+}
+
+/* ------------------------------------------------------------------ dither */
+
+/* typesafe.ai runs its hero photography through a coarse ordered dither.
+   Reproduced here on a canvas so the field is generated rather than copied. */
+const BAYER = [
+  [0, 32, 8, 40, 2, 34, 10, 42],
+  [48, 16, 56, 24, 50, 18, 58, 26],
+  [12, 44, 4, 36, 14, 46, 6, 38],
+  [60, 28, 52, 20, 62, 30, 54, 22],
+  [3, 35, 11, 43, 1, 33, 9, 41],
+  [51, 19, 59, 27, 49, 17, 57, 25],
+  [15, 47, 7, 39, 13, 45, 5, 37],
+  [63, 31, 55, 23, 61, 29, 53, 21],
+];
+
+const CLOUD_STOPS = [
+  [0, [254, 254, 254]],
+  [0.34, [217, 239, 255]],
+  [0.58, [255, 118, 253]],
+  [0.78, [243, 134, 161]],
+  [1, [254, 254, 254]],
+];
+
+function paintCloud() {
+  const canvas = root.querySelector('.hero-cloud');
+  if (!canvas) return;
+
+  /* Low internal resolution: the chunky cells are the point. */
+  const scale = 5;
+  const width = Math.max(120, Math.round(canvas.clientWidth / scale));
+  const height = Math.max(40, Math.round(canvas.clientHeight / scale));
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
+  for (const [offset, [r, g, b]] of CLOUD_STOPS) {
+    gradient.addColorStop(offset, `rgb(${r},${g},${b})`);
+  }
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  /* Break the ramp up with a couple of soft lobes before dithering. */
+  for (const [cx, cy, radius, tint] of [
+    [0.26, 0.42, 0.42, 'rgba(255,82,252,0.85)'],
+    [0.68, 0.58, 0.36, 'rgba(243,134,161,0.8)'],
+    [0.48, 0.2, 0.3, 'rgba(217,239,255,0.75)'],
+  ]) {
+    const blob = ctx.createRadialGradient(
+      cx * width, cy * height, 0,
+      cx * width, cy * height, radius * width,
+    );
+    blob.addColorStop(0, tint);
+    blob.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = blob;
+    ctx.fillRect(0, 0, width, height);
+  }
+
+  const frame = ctx.getImageData(0, 0, width, height);
+  const pixels = frame.data;
+  const levels = 5;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = (y * width + x) * 4;
+      /* Ordered dithering: shift each channel by the Bayer threshold, then
+         snap it to one of a few flat levels. */
+      const threshold = ((BAYER[y % 8][x % 8] / 64) - 0.5) * (255 / levels);
+      for (let c = 0; c < 3; c += 1) {
+        const value = pixels[i + c] + threshold;
+        pixels[i + c] = Math.round(Math.min(255, Math.max(0, value)) / (255 / levels)) * (255 / levels);
+      }
+    }
+  }
+
+  ctx.putImageData(frame, 0, 0);
 }
 
 /* --------------------------------------------------------------- animation */
@@ -539,3 +643,11 @@ window.addEventListener('hashchange', () => {
 document.documentElement.lang = state.locale === 'zh' ? 'zh-CN' : 'en';
 renderChrome();
 syncFromHash();
+
+/* The dither is rasterised at a fixed low resolution, so it has to be redrawn
+   when the hero changes width. */
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(paintCloud, 180);
+});

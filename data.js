@@ -15,6 +15,7 @@ export const SITE = {
     description:
       '这里汇聚不同的思考方式，也容纳尚未被定义的可能。我们通过创造、实验与协作，让想法真正发生。',
     capabilities: ['AI 协同', '3D 打印', '产品思维'],
+    nav: { index: '索引', record: '作品' },
     sections: {
       index: {
         label: '01 / 索引',
@@ -54,6 +55,7 @@ export const SITE = {
     description:
       'We gather people who do not fit neatly into the usual rankings—then make strange, useful things together.',
     capabilities: ['AI collaboration', '3D printing', 'Product thinking'],
+    nav: { index: 'Index', record: 'Records' },
     sections: {
       index: {
         label: '01 / Index',
