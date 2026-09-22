@@ -205,6 +205,33 @@ const SCENARIOS = [
     url: BASE,
     click: '.tile[data-open="record-006"]',
   },
+  {
+    /* Close-ups for detail checking: tile chrome, the lightbox, mobile hero. */
+    name: 'closeup-tiles',
+    width: 1440,
+    height: 820,
+    url: BASE,
+    scroll: '#intro .grid',
+  },
+  {
+    name: 'closeup-lightbox',
+    width: 1440,
+    height: 900,
+    url: `${BASE}#/b/record-001`,
+    click: '.gallery-item:nth-child(6)',
+  },
+  {
+    name: 'closeup-rail',
+    width: 1440,
+    height: 760,
+    url: `${BASE}#/b/hardware-laser`,
+  },
+  {
+    name: 'closeup-hero-mobile',
+    width: 390,
+    height: 700,
+    url: BASE,
+  },
 ];
 
 const browser = spawn(
@@ -241,10 +268,21 @@ for (const scenario of SCENARIOS) {
       mobile: scenario.width < 500,
     });
 
+    /* A hash-only change does not reload the document, so no load event would
+       fire. Start from a blank page to force a genuine fresh load, and let its
+       own load event pass before we arm the wait. */
+    await cdp.send('Page.navigate', { url: 'about:blank' });
+    await sleep(600);
+
     const loaded = cdp.waitFor('Page.loadEventFired');
     await cdp.send('Page.navigate', { url: scenario.url });
     await loaded;
     await sleep(500);
+
+    if (scenario.scroll) {
+      await cdp.evaluate(`document.querySelector(${JSON.stringify(scenario.scroll)})?.scrollIntoView({block:'start',behavior:'instant'})`);
+      await sleep(500);
+    }
 
     if (scenario.click) await clickSelector(cdp, scenario.click);
 
@@ -256,7 +294,8 @@ for (const scenario of SCENARIOS) {
       const stage = document.querySelector('.stage');
       return {
         mode: document.body.dataset.mode || 'wall',
-        railItems: rail ? rail.children.length : 0,
+        railItems: document.querySelectorAll('.rail-item').length,
+        railRules: document.querySelectorAll('.rail-rule').length,
         railBox: rail ? { w: Math.round(rail.getBoundingClientRect().width), h: Math.round(rail.getBoundingClientRect().height) } : null,
         stageTitle: stage ? stage.querySelector('.stage-title')?.textContent : null,
         stageTop: stage ? Math.round(stage.getBoundingClientRect().top) : null,

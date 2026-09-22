@@ -162,14 +162,17 @@ record('地址栏写入深链', s.hash === '#/b/record-004', `hash=${s.hash}`);
 record('动画残留已清理', s.fly === 0, `fly=${s.fly}`);
 
 /* 3. switch from the rail -------------------------------------------------- */
-await cdp.click('.rail-item:nth-child(1)');
+/* Selected by id: the rail now leads with a group rule, so positional
+   selectors would land on the wrong element. */
+await cdp.click('.rail-item[data-open="about-studio"]');
 s = await probe();
 record('左栏可切到 01 社团介绍', s.title === '社团介绍' && s.mode === 'focus', `title=${s.title}`);
 
 /* 4. gallery + lightbox ---------------------------------------------------- */
 const hasGallery = await cdp.evaluate('document.querySelectorAll(".gallery-item").length');
 record('当前块图集数量符合数据', hasGallery === 0, `gallery=${hasGallery}（社团介绍无图集）`);
-await cdp.click('.rail-item:nth-child(10)');
+record('左栏按分组出现分隔条', (await cdp.evaluate('document.querySelectorAll(".rail-rule").length')) === 4);
+await cdp.click('.rail-item[data-open="record-001"]');
 const galleryCount = await cdp.evaluate('document.querySelectorAll(".gallery-item").length');
 record('3D 打印作品带 15 张图集', galleryCount === 15, `gallery=${galleryCount}`);
 await cdp.click('.gallery-item:nth-child(3)');

@@ -39,31 +39,31 @@ function tileMarkup(block) {
             aria-label="${t('ui').expand(pick(block.title))}">
       <span class="tile-bar">
         <b>${pick(block.code)}</b>
-        <span aria-hidden="true">▪</span>
+        <span class="tile-x" aria-hidden="true">✕</span>
       </span>
       <span class="tile-media">
         <img src="${img(block.img, 'sm')}" alt="" loading="lazy" decoding="async" />
         <span class="tile-plus" aria-hidden="true">＋</span>
       </span>
       <span class="tile-body">
-        <span class="tile-top">
-          <span>${group}</span>
-          <span>${block.num}</span>
-        </span>
         <span class="tile-title">${pick(block.title)}</span>
         <span class="tile-summary">${pick(block.summary)}</span>
+        <span class="tile-foot">
+          <span>${group}</span>
+          <em>${t('ui').open} →</em>
+        </span>
       </span>
     </button>`;
 }
 
-const CORNERS = ['⌐', '¬', 'L', '⌐'];
+const MARKS = '<span></span><span></span><span></span><span></span>';
 
 function wallMarkup() {
   const sections = [
     /* Nine index blocks tile perfectly into three columns; seven records fill
        four, so neither band ends with an orphan. */
     ['index', BLOCKS.filter((b) => b.group === 'index'), '3', 'pink'],
-    ['record', BLOCKS.filter((b) => b.group === 'record'), '4', 'paper'],
+    ['record', BLOCKS.filter((b) => b.group === 'record'), '4', ''],
   ];
 
   return sections
@@ -71,11 +71,9 @@ function wallMarkup() {
       const section = t('sections')[key === 'index' ? 'index' : 'record'];
       return `
         <section class="section" id="${key === 'index' ? 'intro' : 'records'}"
-                 data-field="${field === 'paper' ? '' : field}"
+                 ${field ? `data-field="${field}"` : ''}
                  aria-labelledby="section-${key}">
-          <div class="marks" aria-hidden="true">
-            ${CORNERS.map((glyph) => `<span>${glyph}</span>`).join('')}
-          </div>
+          <div class="marks" aria-hidden="true">${MARKS}</div>
           <div class="shell">
             <div class="section-head">
               <div>
@@ -94,9 +92,16 @@ function wallMarkup() {
 }
 
 function railMarkup(activeId) {
+  let lastSection = null;
   return BLOCKS.map((block) => {
     const isCurrent = block.id === activeId;
+    const rule =
+      block.section !== lastSection
+        ? `<p class="rail-rule">${groupLabel(block.section, state.locale)}</p>`
+        : '';
+    lastSection = block.section;
     return `
+      ${rule}
       <button class="rail-item" type="button" data-open="${block.id}"
               aria-current="${isCurrent}" title="${pick(block.title)}">
         <span class="rail-num">${block.num}</span>
@@ -158,11 +163,11 @@ function stageMarkup(block) {
         </button>
         <span class="mono">${block.num} / ${String(BLOCKS.length).padStart(2, '0')}</span>
         <span class="stage-nav">
-          <button class="ghost" type="button" data-step="-1" aria-label="${ui.previous}"
+          <button class="stage-btn" type="button" data-step="-1" aria-label="${ui.previous}"
                   ${index === 0 ? 'disabled' : ''}>↑</button>
-          <button class="ghost" type="button" data-step="1" aria-label="${ui.next}"
+          <button class="stage-btn" type="button" data-step="1" aria-label="${ui.next}"
                   ${index === BLOCKS.length - 1 ? 'disabled' : ''}>↓</button>
-          <button class="ghost" type="button" data-close aria-label="${ui.close}">✕</button>
+          <button class="stage-btn" type="button" data-close aria-label="${ui.close}">✕</button>
         </span>
       </div>
 
