@@ -252,4 +252,56 @@ const viewportBudget = await cdp.eval(`(() => {
 })()`);
 console.log(`  主内容从视口 ${viewportBudget.stageTop}px 处开始（视口高 ${viewportBudget.vh}px）`);
 
+/* --------------------------------- 6. 读完一块之后，换块要费多少事（核心指标） */
+console.log('\n=== 6. 读完一块后换到别的块要付多少操作（核心指标） ===');
+
+const REACH_PROBE = `(() => {
+  const sheet = document.querySelector('.focus');
+  const rail = document.querySelector('.rail');
+  const vh = window.innerHeight;
+  const inView = (el) => {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    if (getComputedStyle(el).visibility === 'hidden' || !r.width || !r.height) return false;
+    return r.bottom > 0 && r.top < vh;
+  };
+  const inThumbZone = (el) => {
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    if (getComputedStyle(el).visibility === 'hidden' || !r.width || !r.height) return false;
+    return r.top >= vh * 0.6 && r.bottom <= vh + 1;
+  };
+
+  /* Everything that can move you to a different block. */
+  const switchers = [
+    ...document.querySelectorAll('.rail-item'),
+    ...document.querySelectorAll('[data-step], [data-next], [data-prev], [data-open-list]'),
+  ];
+
+  const railBox = rail ? rail.getBoundingClientRect() : null;
+  const railOffsetTop = rail
+    ? Math.round(rail.getBoundingClientRect().top - sheet.getBoundingClientRect().top + sheet.scrollTop)
+    : null;
+
+  return {
+    scrollTop: Math.round(sheet.scrollTop),
+    maxScroll: Math.round(sheet.scrollHeight - sheet.clientHeight),
+    railOffsetTop,
+    /* How far up the reader must scroll before the "jump to any block" list
+       is on screen again. 0 means it never leaves. */
+    scrollBackToRail: rail ? Math.max(0, sheet.scrollTop - Math.max(0, railOffsetTop + railBox.height - vh)) : null,
+    switchersVisible: switchers.filter(inView).length,
+    switchersInThumbZone: switchers.filter(inThumbZone).length,
+    railDragNeeded: rail ? Math.max(0, rail.scrollWidth - rail.clientWidth) : null,
+  };
+})()`;
+
+await cdp.eval(`(() => { const s = document.querySelector('.focus'); s.scrollTop = s.scrollHeight; })()`);
+await sleep(700);
+const reach = await cdp.eval(REACH_PROBE);
+console.log(`  面板总高 ${reach.maxScroll}px，已读到底（scrollTop=${reach.scrollTop}）`);
+console.log(`  → 要够到"跳到任意块"的清单，需往上滚 ${reach.scrollBackToRail}px`);
+console.log(`  → 此刻视口内可见的换块控件：${reach.switchersVisible} 个，其中在拇指区（下 40%）：${reach.switchersInThumbZone} 个`);
+console.log(`  → 清单本身还要横向拖动 ${reach.railDragNeeded}px 才能看到全部 16 项`);
+
 browser.kill();

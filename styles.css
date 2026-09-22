@@ -23,6 +23,19 @@
   --speed: 460ms;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
+  /* Smallest comfortable tap target. Raised to 44px wherever the input is a
+     finger — see the (pointer: coarse) rule below, which keys off input type
+     rather than screen width so tablets are covered too. */
+  --tap: 28px;
+  --sheet-bar: 54px;
+
+  /* Resolve to 0 unless index.html opts into viewport-fit=cover, so desktop
+     and non-notched phones are pixel-identical to before. */
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+
   /* Arial supplies every Latin glyph; the browser then falls through to a
      heiti per character for CJK. SimHei is the literal 黑体 — if you would
      rather have 微软雅黑's cleaner bold, swap the two. */
@@ -107,7 +120,9 @@ ol {
   width: 100%;
   max-width: 1520px;
   margin-inline: auto;
-  padding-inline: var(--pad);
+  /* max() keeps content clear of a notch in landscape without widening the
+     gutters anywhere the insets are 0. */
+  padding-inline: max(var(--pad), var(--safe-l)) max(var(--pad), var(--safe-r));
 }
 
 /* Corner registration marks. Drawn with borders rather than box-drawing
@@ -155,6 +170,7 @@ ol {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-height: var(--tap);
   padding: 5px 10px;
   border: var(--bw) solid var(--ink);
   background: var(--paper);
@@ -180,6 +196,9 @@ ol {
 }
 
 .header-tools a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
   padding: 5px 11px;
   border: var(--bw) solid var(--ink);
   background: var(--paper);
@@ -543,7 +562,7 @@ body[data-mode="focus"] .focus {
   align-items: baseline;
   gap: 8px;
   width: 168px;
-  min-height: 44px;
+  min-height: var(--tap);
   padding: 8px 10px;
   scroll-snap-align: center;
   text-align: left;
@@ -582,6 +601,9 @@ body[data-mode="focus"] .focus {
    bands instead of one long list. */
 .rail-rule {
   flex: none;
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
   padding: 3px 9px;
   border: var(--bw) solid var(--ink);
   background: var(--ink);
@@ -619,7 +641,8 @@ body[data-mode="focus"] .focus {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 2px 4px;
+  min-height: var(--tap);
+  padding: 0 6px;
   font-family: var(--sans);
   font-size: 12px;
   color: var(--paper);
@@ -646,8 +669,8 @@ body[data-mode="focus"] .focus {
 .stage-btn {
   display: grid;
   place-items: center;
-  min-width: 28px;
-  height: 28px;
+  min-width: var(--tap);
+  height: var(--tap);
   padding: 0 6px;
   border: 1px solid var(--paper);
   font-family: var(--sans);
@@ -864,7 +887,7 @@ body[data-mode="focus"] .focus {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 8px var(--pad);
+  padding: calc(8px + var(--safe-t)) max(var(--pad), var(--safe-l)) 8px max(var(--pad), var(--safe-r));
   border-bottom: var(--bw) solid var(--ink);
   background: var(--ink);
   color: var(--paper);
@@ -897,8 +920,8 @@ body[data-mode="focus"] .focus {
   flex: none;
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: max(44px, var(--tap));
+  height: max(44px, var(--tap));
   border: var(--bw) solid var(--ink);
   background: var(--paper);
   font-family: var(--sans);
@@ -1003,42 +1026,25 @@ body[data-mode="focus"] .focus {
   }
 }
 
-/* Thumb-sized controls. The audit found the step/close buttons rendering at
-   18×20px and the back link 23px tall — under half of what a finger needs. */
+/* Tap targets are sized from the input device, not the screen width: an iPad
+   or Surface portrait is 768–1024px and would keep 28px buttons under a
+   width-only rule. */
+@media (pointer: coarse), (max-width: 899px) {
+  :root {
+    --tap: 44px;
+  }
+}
+
+button,
+a {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 @media (max-width: 899px) {
   .stage-bar {
-    min-height: 54px;
+    min-height: var(--sheet-bar);
     padding: 6px var(--pad);
-  }
-
-  .stage-btn {
-    min-width: 44px;
-    height: 44px;
-  }
-
-  .ghost {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    padding: 0 6px;
-  }
-
-  .header-tools a,
-  .brand {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-  }
-
-  .rail-rule {
-    display: flex;
-    align-items: center;
-    min-height: 40px;
-  }
-
-  .arrow {
-    width: 48px;
-    height: 48px;
   }
 
   .site-footer a {
