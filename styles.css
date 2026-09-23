@@ -668,7 +668,7 @@ body[data-list='open'] .list-backdrop {
   justify-content: center;
   gap: 6px;
   min-height: var(--tap);
-  padding: 4px 10px;
+  padding: 4px 8px;
   border: var(--bw) solid var(--ink);
   background: var(--panel);
   font-family: var(--sans);
@@ -699,15 +699,15 @@ body[data-list='open'] .list-backdrop {
 /* The primary cell is the one thing a thumb should be aiming at. */
 .bar-next {
   justify-content: flex-start;
-  gap: 8px;
+  gap: 6px;
   background: var(--ink);
   color: var(--paper);
 }
 
 .bar-kicker {
   flex: none;
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
+  font-size: 10px;
+  letter-spacing: 0.04em;
   opacity: 0.7;
   white-space: nowrap;
 }

@@ -609,6 +609,28 @@ const roving = await cdp.evaluate(`(async () => {
 })()`);
 record('末块按方向键不会跳进下一段', roving.stayedInGrid === true, JSON.stringify(roving));
 
+/* The bar promises the next block by name. Walk every transition at 390px and
+   fail if any title is cut — a longer title added to data.js later would
+   otherwise clip silently. */
+await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+await cdp.send('Page.navigate', { url: BASE });
+await sleep(1800);
+await cdp.evaluate(`document.querySelector('.tile').click()`);
+await sleep(1300);
+const clippedTitles = [];
+for (let i = 0; i < BLOCKS.length - 1; i += 1) {
+  const cell = await cdp.evaluate(`(() => {
+    const t = document.querySelector('.bar-title');
+    if (!t) return null;
+    return { text: t.textContent.trim(), clipped: t.scrollWidth > t.clientWidth + 1,
+             need: Math.ceil(t.scrollWidth), have: t.clientWidth };
+  })()`);
+  if (cell?.clipped) clippedTitles.push(`「${cell.text}」需 ${cell.need}px 只有 ${cell.have}px`);
+  await cdp.evaluate(`document.querySelector('[data-next]').click()`);
+  await sleep(650);
+}
+record('390px 下每一块“下一篇”标题都完整', clippedTitles.length === 0, clippedTitles.slice(0, 3).join('; '));
+
 /* 11. errors --------------------------------------------------------------- */
 record('全程无 console 报错/异常', cdp.consoleErrors.length === 0, cdp.consoleErrors.slice(0, 3).join(' | '));
 
