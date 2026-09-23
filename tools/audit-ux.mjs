@@ -369,11 +369,13 @@ for (const [label, w, h, mobile] of SIZES) {
   console.log(`  ${label.padEnd(16)} 左栏=${row.layout.padEnd(7)} 吸底条=${row.bar.padEnd(6)} 目标 ${row.targets} 个，小于44px ${row.under44} 个`);
 }
 
-/* Media boxes are a fixed 4/3 with object-fit: cover, which is what keeps the
-   wall tidy — but cover *cuts*. This prints how much of each block's art is
-   actually being thrown away, because "the tall poster looks cropped" is a
-   claim about pixels, not about taste, and it should not be judged by eye. */
-console.log('\n=== 9. 主图被裁掉多少（固定 4:3 + cover 的代价） ===');
+/* The wall tiles stay a fixed 4/3 with cover so the grid keeps its rhythm, but
+   the detail view now follows the artwork. This measures what is actually
+   painted per block, because "the tall poster looks cropped" is a claim about
+   pixels rather than taste — and it should be re-measured, not remembered: the
+   first version of this probe scored a letterbox as a crop, since it only knew
+   how to measure cover. */
+console.log('\n=== 9. 详情主图有没有裁掉作品（逐块实测 object-fit） ===');
 await load(BASE, 1440, 900);
 await cdp.send('Page.navigate', { url: `${BASE}#/b/about-studio` });
 await sleep(2600);
@@ -386,15 +388,19 @@ for (let i = 0; i < 16; i += 1) {
     const r = img.getBoundingClientRect();
     const natural = img.naturalWidth / img.naturalHeight;
     const shown = r.width / r.height;
-    /* cover scales to fill: whichever axis is relatively shorter is the one
-       that gets clipped. */
-    const kept = Math.min(natural / shown, shown / natural);
+    const fit = getComputedStyle(img).objectFit;
+    /* cover crops: the odd axis out loses artwork. contain never loses artwork,
+       it only loses space — so a letterbox must not be reported as a crop. */
+    const kept = fit === 'contain' ? 1 : Math.min(natural / shown, shown / natural);
+    const paintedW = Math.min(r.width, r.height * natural);
+    const paintedH = Math.min(r.height, r.width / natural);
     return {
       title: document.querySelector('.stage-title')?.textContent?.trim(),
-      file: img.currentSrc.replace(/^.*\\//, ''),
+      fit,
       nat: img.naturalWidth + '×' + img.naturalHeight,
       box: Math.round(r.width) + '×' + Math.round(r.height),
       keptPct: Math.round(kept * 100),
+      matPct: Math.round((1 - (paintedW * paintedH) / (r.width * r.height)) * 100),
     };
   })()`);
   if (row) crops.push(row);
@@ -403,10 +409,14 @@ for (let i = 0; i < 16; i += 1) {
 }
 crops.sort((a, b) => a.keptPct - b.keptPct);
 for (const c of crops) {
-  console.log(`  ${c.title.padEnd(18)} 原图 ${c.nat.padEnd(11)} 显示框 ${c.box.padEnd(10)} 保留 ${String(c.keptPct).padStart(3)}%${c.keptPct < 80 ? '  ← 裁掉 ' + (100 - c.keptPct) + '%' : ''}`);
+  const loss = c.keptPct < 100 ? `  ← 裁掉 ${100 - c.keptPct}%` : (c.matPct > 25 ? `  （留白 ${c.matPct}%）` : '');
+  console.log(`  ${c.title.padEnd(18)} 原图 ${c.nat.padEnd(11)} 显示框 ${c.box.padEnd(10)} ${String(c.fit).padEnd(8)} 作品完整 ${String(c.keptPct).padStart(3)}%${loss}`);
 }
-const worst = crops[0];
-console.log(`  → 最严重的一张裁掉 ${100 - worst?.keptPct}%（${worst?.title}，${worst?.nat}）`);
-console.log(`  → 裁掉超过 20% 的：${crops.filter((c) => c.keptPct < 80).length} / ${crops.length} 块`);
+const lost = crops.filter((c) => c.keptPct < 100);
+console.log(lost.length
+  ? `  → 仍有 ${lost.length} / ${crops.length} 块在裁作品，最严重的一张丢掉 ${100 - lost[0].keptPct}%`
+  : `  → ${crops.length} / ${crops.length} 块的作品都完整可见（object-fit: contain）`);
+const mats = crops.filter((c) => c.matPct > 25);
+if (mats.length) console.log(`  → 代价：${mats.length} 块因限高出现较多留白（${mats.map((c) => c.title + ' ' + c.matPct + '%').join('，')}）`);
 
 await chrome.cleanup();
