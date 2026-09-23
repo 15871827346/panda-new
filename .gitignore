@@ -8,3 +8,6 @@ tools/assets-report.json
 .DS_Store
 Thumbs.db
 *.log
+
+# 待定的 AI 候选图，还没换进站点，不入库
+candidates/
