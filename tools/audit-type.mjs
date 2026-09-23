@@ -5,13 +5,10 @@
 
      node tools/audit-type.mjs
 --------------------------------------------------------------------------- */
-import { spawn } from 'node:child_process';
 import { ensureServer } from './ensure-server.mjs';
+import { startChrome } from './browser.mjs';
 
-const CHROME =
-  'C:/Users/24772/AppData/Local/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-win64/chrome-headless-shell.exe';
-const PORT = 9348;
-const BASE = 'http://127.0.0.1:4321/';
+let BASE = 'http://127.0.0.1:4321/';
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 class CDP {
@@ -58,26 +55,12 @@ class CDP {
   }
 }
 
-await ensureServer();
-const browser = spawn(
-  CHROME,
-  [`--remote-debugging-port=${PORT}`, '--remote-allow-origins=*', '--no-sandbox', '--window-size=1440,1000', 'about:blank'],
-  { stdio: 'ignore' },
-);
-process.on('exit', () => browser.kill());
+const server = await ensureServer(process.env.PANDA_PORT ? 0 : 4321);
+BASE = server.base;
+const chrome = await startChrome();
+process.on('exit', () => chrome.cleanup());
 
-let target = null;
-for (let i = 0; i < 80 && !target; i += 1) {
-  try {
-    const list = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
-    target = list.find((t) => t.type === 'page')?.webSocketDebuggerUrl;
-  } catch {
-    /* starting */
-  }
-  if (!target) await sleep(250);
-}
-
-const cdp = await CDP.connect(target);
+const cdp = await CDP.connect(chrome.websocket);
 await cdp.send('Page.enable');
 await cdp.send('Runtime.enable');
 
@@ -230,4 +213,4 @@ const focus = await cdp.eval(FOCUS_PROBE);
 console.log('\n=== 放大态（3D 打印作品） ===');
 console.table(focus);
 
-browser.kill();
+await chrome.cleanup();

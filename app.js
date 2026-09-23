@@ -739,7 +739,9 @@ function openLightbox(index, trigger = null) {
   overlay.innerHTML = `
     <div class="lightbox-bar">
       <span class="mono">${pick(block.title)}</span>
-      <span class="mono">${String(clamped + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}</span>
+      /* Addressed by name in the tests: nth-child broke the moment a element was
+         added to the bar. */
+      <span class="mono" data-lb-count>${String(clamped + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}</span>
       <button class="ghost" type="button" data-lb-close aria-label="${ui.close}">✕</button>
     </div>
     <div class="lightbox-stage">
@@ -859,6 +861,11 @@ function applyHash() {
     if (id !== state.activeId) openBlock(id, null, { push: false });
     return;
   }
+  /* A block link for a block that does not exist — a typo, or a block renamed
+     after someone bookmarked it — falls back to the wall. Clean the address
+     out while doing so: leaving it in place means the dead hash gets shared on,
+     bookmarked again, and survives every Back press in the session. */
+  if (id) history.replaceState(null, '', location.pathname + location.search);
   if (state.activeId) closeBlock({ keepHistory: true });
 }
 

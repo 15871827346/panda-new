@@ -13,7 +13,7 @@ export const SITE = {
     title: ['with AI, anything'],
     description:
       '这里汇聚不同的思考方式，也容纳尚未被定义的可能。我们通过创造、实验与协作，让想法真正发生。',
-    capabilities: ['AI 协同', '3D 打印', '产品思维'],
+    capabilities: ['AI 协同', '3D 打印', '快速原型', '产品思维'],
     nav: { index: '索引', record: '作品' },
     sections: {
       index: {
@@ -45,7 +45,7 @@ export const SITE = {
       backToWallShort: '回到方块墙',
       announced: (num, total, title) => `已切到第 ${num} 块，共 ${total} 块：${title}`,
       hintOpen: '点击任意方块放大',
-      hintFocus: '左右方向键或底部按钮切换，点「全部方块」看完整清单',
+      hintFocus: '左右方向键或底部按钮切换，点“全部方块”看完整清单',
       close: '关闭',
       previous: '上一个方块',
       next: '下一个方块',
@@ -62,7 +62,7 @@ export const SITE = {
     title: ['with AI, anything'],
     description:
       'We gather people who do not fit neatly into the usual rankings—then make strange, useful things together.',
-    capabilities: ['AI collaboration', '3D printing', 'Product thinking'],
+    capabilities: ['AI collaboration', '3D printing', 'Rapid prototyping', 'Product thinking'],
     nav: { index: 'Index', record: 'Records' },
     sections: {
       index: {
@@ -215,11 +215,11 @@ export const BLOCKS = [
     gallery: ['hw-arm-2'],
     title: { zh: '机械臂', en: 'Robotic arm' },
     summary: {
-      zh: '让 AI 从「思考」走向「动手」。',
+      zh: '让 AI 从“思考”走向“动手”。',
       en: 'Move AI from thinking into doing.',
     },
     body: {
-      zh: '让 AI 从「思考」走向「动手」。\n工业机械臂可以完成抓取、搬运、加工、雕刻、装配和空间制造等任务。结合 AI 视觉识别、路径规划与智能控制后，它不仅能按照预设程序工作，还可以根据物体、环境和任务要求调整动作。\n从 AI 生成方案，到机械臂完成真实世界中的操作，让数字设计进一步转化为自动化制造。',
+      zh: '让 AI 从“思考”走向“动手”。\n工业机械臂可以完成抓取、搬运、加工、雕刻、装配和空间制造等任务。结合 AI 视觉识别、路径规划与智能控制后，它不仅能按照预设程序工作，还可以根据物体、环境和任务要求调整动作。\n从 AI 生成方案，到机械臂完成真实世界中的操作，让数字设计进一步转化为自动化制造。',
       en: 'Explore fabrication, motion control, and spatial making with an industrial robotic arm.',
     },
     items: {
@@ -263,7 +263,7 @@ export const BLOCKS = [
       en: 'Not games—game mechanics applied to real problems.',
     },
     body: {
-      zh: '我们关注的不是「做一个游戏」，而是把游戏中的规则、反馈、挑战和成长机制带进真实问题。\n成员可以围绕学习、校园体验、交互产品或公共议题设计不同的游戏化方案，通过任务系统、积分机制、角色设定、即时反馈等方式，让原本枯燥或复杂的过程变得更直观、更有参与感，并在实际测试中不断优化体验。',
+      zh: '我们关注的不是“做一个游戏”，而是把游戏中的规则、反馈、挑战和成长机制带进真实问题。\n成员可以围绕学习、校园体验、交互产品或公共议题设计不同的游戏化方案，通过任务系统、积分机制、角色设定、即时反馈等方式，让原本枯燥或复杂的过程变得更直观、更有参与感，并在实际测试中不断优化体验。',
       en: 'Not simply making games—use game mechanics to help people understand or solve a problem.',
     },
     items: {
@@ -301,7 +301,7 @@ export const BLOCKS = [
     code: { zh: '研究 / 04', en: 'RESEARCH / 04' },
     img: 're-arm',
     gallery: [],
-    title: { zh: '机械臂方向', en: 'Robotic arms' },
+    title: { zh: '机器人制造', en: 'Robotic making' },
     summary: {
       zh: '用机器视觉与智能算法驱动工业机械臂。',
       en: 'Drive an industrial arm with machine vision and planning.',

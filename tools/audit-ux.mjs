@@ -5,13 +5,11 @@
 
      node tools/audit-ux.mjs
 --------------------------------------------------------------------------- */
-import { spawn } from 'node:child_process';
 import { ensureServer } from './ensure-server.mjs';
+import { startChrome } from './browser.mjs';
 
-const CHROME =
-  'C:/Users/24772/AppData/Local/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-win64/chrome-headless-shell.exe';
-const PORT = 9349;
-const BASE = 'http://127.0.0.1:4321/';
+/* The URL is filled in from ensureServer(), which may pick a private port. */
+let BASE = 'http://127.0.0.1:4321/';
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 class CDP {
@@ -83,26 +81,13 @@ class CDP {
   }
 }
 
-await ensureServer();
-const browser = spawn(
-  CHROME,
-  [`--remote-debugging-port=${PORT}`, '--remote-allow-origins=*', '--no-sandbox', '--disable-gpu', '--window-size=1440,900', 'about:blank'],
-  { stdio: 'ignore' },
-);
-process.on('exit', () => browser.kill());
+const server = await ensureServer(process.env.PANDA_PORT ? 0 : 4321);
+BASE = server.base;
+/* Private browser, private profile, OS-assigned debug port — see browser.mjs. */
+const chrome = await startChrome();
+process.on('exit', () => chrome.cleanup());
 
-let target = null;
-for (let i = 0; i < 80 && !target; i += 1) {
-  try {
-    const list = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
-    target = list.find((t) => t.type === 'page')?.webSocketDebuggerUrl;
-  } catch {
-    /* starting */
-  }
-  if (!target) await sleep(250);
-}
-
-const cdp = await CDP.connect(target);
+const cdp = await CDP.connect(chrome.websocket);
 await cdp.send('Page.enable');
 await cdp.send('Runtime.enable');
 
@@ -384,4 +369,44 @@ for (const [label, w, h, mobile] of SIZES) {
   console.log(`  ${label.padEnd(16)} 左栏=${row.layout.padEnd(7)} 吸底条=${row.bar.padEnd(6)} 目标 ${row.targets} 个，小于44px ${row.under44} 个`);
 }
 
-browser.kill();
+/* Media boxes are a fixed 4/3 with object-fit: cover, which is what keeps the
+   wall tidy — but cover *cuts*. This prints how much of each block's art is
+   actually being thrown away, because "the tall poster looks cropped" is a
+   claim about pixels, not about taste, and it should not be judged by eye. */
+console.log('\n=== 9. 主图被裁掉多少（固定 4:3 + cover 的代价） ===');
+await load(BASE, 1440, 900);
+await cdp.send('Page.navigate', { url: `${BASE}#/b/about-studio` });
+await sleep(2600);
+const crops = [];
+for (let i = 0; i < 16; i += 1) {
+  const row = await cdp.eval(`(() => {
+    const box = document.querySelector('[data-stage-media]');
+    const img = box?.querySelector('img');
+    if (!img || !img.naturalWidth) return null;
+    const r = img.getBoundingClientRect();
+    const natural = img.naturalWidth / img.naturalHeight;
+    const shown = r.width / r.height;
+    /* cover scales to fill: whichever axis is relatively shorter is the one
+       that gets clipped. */
+    const kept = Math.min(natural / shown, shown / natural);
+    return {
+      title: document.querySelector('.stage-title')?.textContent?.trim(),
+      file: img.currentSrc.replace(/^.*\\//, ''),
+      nat: img.naturalWidth + '×' + img.naturalHeight,
+      box: Math.round(r.width) + '×' + Math.round(r.height),
+      keptPct: Math.round(kept * 100),
+    };
+  })()`);
+  if (row) crops.push(row);
+  await cdp.eval(`document.querySelector('[data-step="1"]')?.click()`);
+  await sleep(700);
+}
+crops.sort((a, b) => a.keptPct - b.keptPct);
+for (const c of crops) {
+  console.log(`  ${c.title.padEnd(18)} 原图 ${c.nat.padEnd(11)} 显示框 ${c.box.padEnd(10)} 保留 ${String(c.keptPct).padStart(3)}%${c.keptPct < 80 ? '  ← 裁掉 ' + (100 - c.keptPct) + '%' : ''}`);
+}
+const worst = crops[0];
+console.log(`  → 最严重的一张裁掉 ${100 - worst?.keptPct}%（${worst?.title}，${worst?.nat}）`);
+console.log(`  → 裁掉超过 20% 的：${crops.filter((c) => c.keptPct < 80).length} / ${crops.length} 块`);
+
+await chrome.cleanup();

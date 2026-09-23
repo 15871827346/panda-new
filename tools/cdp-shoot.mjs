@@ -7,18 +7,17 @@
 
      node tools/cdp-shoot.mjs
 --------------------------------------------------------------------------- */
-import { spawn } from 'node:child_process';
 import { ensureServer } from './ensure-server.mjs';
+import { startChrome } from './browser.mjs';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(ROOT, 'shots');
-const CHROME =
-  'C:/Users/24772/AppData/Local/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-win64/chrome-headless-shell.exe';
-const PORT = 9333;
-const BASE = 'http://127.0.0.1:4321/';
+/* ensureServer() hands back the address to shoot: a private port when 4321 is
+   already taken by something else. */
+let BASE = 'http://127.0.0.1:4321/';
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
@@ -84,20 +83,6 @@ class CDP {
   }
 }
 
-async function devtoolsUrl() {
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    try {
-      const list = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
-      const page = list.find((target) => target.type === 'page');
-      if (page?.webSocketDebuggerUrl) return page.webSocketDebuggerUrl;
-    } catch {
-      /* the browser is still starting */
-    }
-    await sleep(250);
-  }
-  throw new Error('DevTools endpoint never came up');
-}
-
 /* Wait until every image that is in the document has finished decoding.
    Lazy images far down the page never start on their own, so promote them and
    cap the wait. */
@@ -149,6 +134,24 @@ async function clickSelector(cdp, selector) {
   }
   await sleep(1400);
 }
+
+/* This has to happen before SCENARIOS is built: each scenario captures `url`
+   into the array literal when the module evaluates, so a BASE assigned
+   afterwards would leave all sixteen of them pointing at the default port —
+   which reads as "the app never rendered" rather than "the tool shot a dead
+   address". */
+const server = await ensureServer(process.env.PANDA_PORT ? 0 : 4321);
+BASE = server.base;
+/* Screenshots want no scrollbars and an exact 1:1 device scale, so the two
+   flags the other tools do not pass are set here rather than in browser.mjs. */
+const chrome = await startChrome({
+  extraArgs: ['--hide-scrollbars', '--force-device-scale-factor=1'],
+});
+process.on('exit', () => chrome.cleanup());
+await mkdir(OUT, { recursive: true });
+const cdp = await CDP.connect(chrome.websocket);
+await cdp.send('Page.enable');
+await cdp.send('Runtime.enable');
 
 const SCENARIOS = [
   {
@@ -207,7 +210,14 @@ const SCENARIOS = [
     click: '.tile[data-open="record-006"]',
   },
   {
-    /* Close-ups for detail checking: tile chrome, the lightbox, mobile hero. */
+    /* The fixed 4/3 frame cut 66% off this 1256×2760 screenshot. Shot at the
+       detail view so the fix can be looked at rather than believed. */
+    name: 'focus-tall-image-desktop',
+    width: 1440,
+    height: 1100,
+    url: `${BASE}#/b/record-007`,
+  },
+  {
     name: 'closeup-tiles',
     width: 1440,
     height: 820,
@@ -251,29 +261,6 @@ const SCENARIOS = [
     thenClick: '[data-open-list]',
   },
 ];
-
-await ensureServer();
-const browser = spawn(
-  CHROME,
-  [
-    `--remote-debugging-port=${PORT}`,
-    '--remote-allow-origins=*',
-    '--no-sandbox',
-    '--disable-gpu',
-    '--hide-scrollbars',
-    '--force-device-scale-factor=1',
-    '--window-size=1440,900',
-    'about:blank',
-  ],
-  { stdio: 'ignore' },
-);
-
-process.on('exit', () => browser.kill());
-
-await mkdir(OUT, { recursive: true });
-const cdp = await CDP.connect(await devtoolsUrl());
-await cdp.send('Page.enable');
-await cdp.send('Runtime.enable');
 
 const results = [];
 
@@ -363,5 +350,5 @@ for (const scenario of SCENARIOS) {
 }
 
 await writeFile(resolve(OUT, 'cdp-report.json'), JSON.stringify(results, null, 2));
-browser.kill();
+await chrome.cleanup();
 console.log('\nreport:', resolve(OUT, 'cdp-report.json'));
