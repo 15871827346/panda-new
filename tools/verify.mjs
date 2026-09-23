@@ -47,9 +47,13 @@ const shotsOf = (id) => {
   return n >= 2 ? n : 0;
 };
 
-/* Assigned from ensureServer() below — it may hand back a private port rather
-   than 4321 if something else already owns that one. */
-let BASE = 'http://127.0.0.1:4321/';
+/* PANDA_URL points the whole suite at a deployed site instead of a local one —
+   used to prove the version that actually went public is the version that was
+   tested. Otherwise PANDA_PORT gives a mutation copy its own private server,
+   and with neither flag we reuse 4321 only if something there really serves
+   this app. */
+const LIVE = process.env.PANDA_URL ?? null;
+let BASE = LIVE ?? 'http://127.0.0.1:4321/';
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 /* ------------------------------------------------------------------ harness */
@@ -239,8 +243,10 @@ class CDP {
 /* PANDA_PORT is how tools/mutate.mjs gives each copy its own server; without
    it, a leftover server for the *original* project on 4321 would be reused and
    every mutation would appear to change nothing. */
-const server = await ensureServer(process.env.PANDA_PORT ? 0 : 4321);
-BASE = server.base;
+if (!LIVE) {
+  const server = await ensureServer(process.env.PANDA_PORT ? 0 : 4321);
+  BASE = server.base;
+}
 const chrome = await startChrome();
 process.on('exit', () => chrome.cleanup());
 
@@ -248,6 +254,7 @@ const cdp = await CDP.connect(chrome.websocket);
 /* If the server goes away mid-run, every later navigation silently lands on an
    error page; `goto` calls this to bring it back before retrying. */
 cdp.revive = async () => {
+  if (LIVE) { await sleep(600); return; }
   const back = await ensureServer().catch(() => null);
   if (back) BASE = back.base;
   await sleep(200);
