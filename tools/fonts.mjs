@@ -3,6 +3,7 @@
    used.   node tools/fonts.mjs
 */
 import { spawn } from 'node:child_process';
+import { ensureServer } from './ensure-server.mjs';
 import { resolve } from 'node:path';
 
 const CHROME =
@@ -50,6 +51,7 @@ class CDP {
   }
 }
 
+await ensureServer();
 const browser = spawn(
   CHROME,
   [`--remote-debugging-port=${PORT}`, '--remote-allow-origins=*', '--no-sandbox', '--window-size=1440,1000', 'about:blank'],

@@ -6,6 +6,7 @@
      node tools/audit-type.mjs
 --------------------------------------------------------------------------- */
 import { spawn } from 'node:child_process';
+import { ensureServer } from './ensure-server.mjs';
 
 const CHROME =
   'C:/Users/24772/AppData/Local/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-win64/chrome-headless-shell.exe';
@@ -57,6 +58,7 @@ class CDP {
   }
 }
 
+await ensureServer();
 const browser = spawn(
   CHROME,
   [`--remote-debugging-port=${PORT}`, '--remote-allow-origins=*', '--no-sandbox', '--window-size=1440,1000', 'about:blank'],
@@ -123,8 +125,7 @@ const PROBE = `(() => {
     const text = el.textContent.trim();
     const cjk = (text.match(/[\\u3400-\\u9FFF\\u3000-\\u303F\\uFF00-\\uFFEF]/g) || []).length;
     const perChar = cjk / Math.max(1, text.length) >= 0.5 ? 1 : 0.52;
-    const usable = widest - track * (widest / size) * 0;
-    const charsPerLine = Math.round(usable / (size * perChar + track));
+    const charsPerLine = Math.round(widest / (size * perChar + track));
 
     const clipped = el.scrollHeight - el.clientHeight > 1 ||
       rects.some((r) => r.width > el.clientWidth + 1);

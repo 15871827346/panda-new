@@ -1,10 +1,16 @@
 /* ---------------------------------------------------------------------------
    Panda Studio — block index interaction.
 
-   Two states:
+   Two states, both driven by body[data-mode]:
      wall   — every block sits in a grid.
-     focus  — the chosen block is enlarged in the main stage; every other
-              block shrinks into a single vertical column on the left.
+     focus  — an overlay sheet covers the wall and shows one block enlarged.
+              The wall is never unmounted, so the reader's position in it
+              survives a round trip.
+
+   Where the other blocks go differs by width: at >=900px they stay as a
+   sticky left column beside the stage; below that they live in a list drawer
+   that rises from the bottom, and the sheet ends in a sticky bar offering the
+   previous block, the next block by name, and the drawer.
 --------------------------------------------------------------------------- */
 
 import { BLOCKS, SITE, groupLabel } from './data.js';
@@ -211,7 +217,9 @@ function sheetBarMarkup(block) {
                aria-label="${ui.prevTo(pick(prev.title))}" title="${pick(prev.title)}">
          <span aria-hidden="true">‹</span><span>${prev.num}</span>
        </button>`
-    : '<span class="bar-cell bar-prev" aria-hidden="true"></span>';
+    /* A disabled button, not an empty span: a bordered 44px box that does
+       nothing reads as a broken control. */
+    : `<span class="bar-cell bar-prev bar-prev--off" aria-hidden="true">‹</span>`;
 
   /* No wrapping at the end: silently looping sixteen blocks hides the fact
      that the reader has reached the bottom of the archive. */
@@ -545,6 +553,23 @@ function onScreen(rect) {
   );
 }
 
+/* Tear down every transient layer above the sheet. closeBlock used to null the
+   lightbox state without removing its node, which left an opaque full-screen
+   z-120 sheet over the wall with no way to dismiss it. */
+function dismissOverlays() {
+  root.querySelector('.lightbox')?.remove();
+  delete document.body.dataset.lightbox;
+  state.lightbox = null;
+  closeList();
+  root.querySelector('.focus')?.removeAttribute('inert');
+  root.querySelector('.stage')?.removeAttribute('inert');
+}
+
+/* Whether the sheet currently owns a history entry. Only then may closing it
+   call history.back() — a block opened from a deep link has no in-site entry
+   behind it, and going back would leave the site. */
+let ownsHistoryEntry = false;
+
 /* The detail sheet is an overlay, not a page swap: the wall stays exactly
    where it was, so no scroll position is ever lost and both ends of the fly
    animation hold still while it runs. */
@@ -556,27 +581,31 @@ async function openBlock(id, opener, { push = true } = {}) {
   const from = sourceMedia ? rectOf(sourceMedia) : null;
 
   busy = true;
-  state.activeId = id;
-  state.lightbox = null;
-  document.body.dataset.mode = 'focus';
-  renderFocus();
-  /* A click stacks an entry so Back closes; a deep link or popstate fills the
-     entry it already owns. */
-  if (push) history.pushState({ pandaBlock: id }, '', `#/b/${id}`);
-  else history.replaceState({ pandaBlock: id }, '', `#/b/${id}`);
-
-  const stageMedia = root.querySelector('[data-stage-media]');
-  const stageImage = stageMedia?.querySelector('img');
-  if (stageImage) stageImage.style.opacity = '0';
-
   try {
-    await nextFrame();
-    if (from && stageMedia) await fly(from, rectOf(stageMedia), img(block.img));
-    const sheet = root.querySelector('.focus');
-    if (sheet) sheet.scrollTop = 0;
-    root.querySelector('.stage')?.focus({ preventScroll: true });
+    dismissOverlays();
+    state.activeId = id;
+    document.body.dataset.mode = 'focus';
+    renderFocus();
+    /* A click stacks an entry so Back closes; a deep link or popstate fills the
+       entry it already owns. */
+    ownsHistoryEntry = push;
+    if (push) history.pushState({ pandaBlock: id }, '', `#/b/${id}`);
+    else history.replaceState({ pandaBlock: id }, '', `#/b/${id}`);
+
+    const stageMedia = root.querySelector('[data-stage-media]');
+    const stageImage = stageMedia?.querySelector('img');
+    if (stageImage) stageImage.style.opacity = '0';
+
+    try {
+      await nextFrame();
+      if (from && stageMedia) await fly(from, rectOf(stageMedia), img(block.img));
+      const sheet = root.querySelector('.focus');
+      if (sheet) sheet.scrollTop = 0;
+      root.querySelector('.stage')?.focus({ preventScroll: true });
+    } finally {
+      if (stageImage) stageImage.style.opacity = '';
+    }
   } finally {
-    if (stageImage) stageImage.style.opacity = '';
     busy = false;
   }
 }
@@ -590,11 +619,11 @@ async function closeBlock({ keepHistory = false } = {}) {
     const stageMedia = root.querySelector('[data-stage-media]');
     const from = stageMedia ? rectOf(stageMedia) : null;
 
+    dismissOverlays();
     state.activeId = null;
-    state.lightbox = null;
     document.body.dataset.mode = 'wall';
-    delete document.body.dataset.list;
     resume.clear();
+    ownsHistoryEntry = false;
     root.querySelector('.focus').innerHTML = '';
     if (!keepHistory) history.replaceState(null, '', location.pathname + location.search);
 
@@ -616,10 +645,13 @@ async function closeBlock({ keepHistory = false } = {}) {
 }
 
 /** The ✕ and the browser Back button share one path so the history stack stays
-   honest — pressing back on a phone closes the block instead of leaving. */
+   honest — pressing back on a phone closes the block instead of leaving.
+   It asks whether this sheet pushed the entry rather than testing the state
+   object: a block opened from a deep link carries state but has no in-site
+   entry behind it, and going back there leaves the site. */
 function requestClose() {
   if (!state.activeId) return;
-  if (history.state?.pandaBlock) history.back();
+  if (ownsHistoryEntry) history.back();
   else closeBlock();
 }
 
@@ -643,42 +675,54 @@ async function switchBlock(id) {
 
   const sheet = root.querySelector('.focus');
   if (sheet && sheet.scrollTop > 0) resume.set(state.activeId, sheet.scrollTop);
-  if (document.body.dataset.list === 'open') closeList();
 
+  /* Without this guard a throw anywhere below latches busy forever, and every
+     open/close/switch then returns early — a locked, unclosable overlay. */
   busy = true;
-  state.activeId = id;
-  state.lightbox = null;
-  renderStageOnly(block);
-  updateSheetBar(block);
-  syncRail(id);
-  /* Replacing rather than pushing keeps Back leaving the sheet instead of
-     walking back through every block visited. */
-  history.replaceState({ pandaBlock: id }, '', `#/b/${id}`);
+  try {
+    state.activeId = id;
+    root.querySelector('.lightbox')?.remove();
+    delete document.body.dataset.lightbox;
+    state.lightbox = null;
+    closeList();
+    renderStageOnly(block);
+    updateSheetBar(block);
+    syncRail(id);
+    /* Replacing rather than pushing keeps Back leaving the sheet instead of
+       walking back through every block visited. */
+    history.replaceState({ pandaBlock: id }, '', `#/b/${id}`);
 
   if (sheet) {
     const limit = Math.max(0, sheet.scrollHeight - sheet.clientHeight);
     sheet.scrollTop = Math.min(resume.get(id) ?? 0, limit);
   }
 
-  const stage = root.querySelector('.stage');
-  stage?.focus({ preventScroll: true });
-  const announce = root.querySelector('[data-announce]');
-  if (announce) announce.textContent = t('ui').announced(block.num, BLOCKS.length, pick(block.title));
+    const stage = root.querySelector('.stage');
+    stage?.focus({ preventScroll: true });
+    const announce = root.querySelector('[data-announce]');
+    if (announce) announce.textContent = t('ui').announced(block.num, BLOCKS.length, pick(block.title));
 
-  await wait(40);
-  busy = false;
+    await wait(40);
+  } finally {
+    busy = false;
+  }
 }
 
-function openLightbox(index) {
+let lightboxTrigger = null;
+
+function openLightbox(index, trigger = null) {
   const block = byId(state.activeId);
   if (!block) return;
-  state.lightbox = index;
-  document.body.dataset.lightbox = 'on';
 
   const shots = [block.img, ...block.gallery];
   const ui = t('ui');
   const total = shots.length;
+  /* Clamp first: assigning the raw index let repeated ArrowRight overshoot
+     silently, so N wasted presses cost N dead presses on the way back. */
   const clamped = Math.max(0, Math.min(index, total - 1));
+  state.lightbox = clamped;
+  document.body.dataset.lightbox = 'on';
+  if (trigger) lightboxTrigger = trigger;
 
   let overlay = root.querySelector('.lightbox');
   if (!overlay) {
@@ -715,7 +759,10 @@ function closeLightbox() {
   delete document.body.dataset.lightbox;
   root.querySelector('.lightbox')?.remove();
   root.querySelector('.focus')?.removeAttribute('inert');
-  root.querySelector('.gallery-item')?.focus({ preventScroll: true });
+  /* Return to the thumbnail that was opened, not always the first one. */
+  const back = lightboxTrigger?.isConnected ? lightboxTrigger : root.querySelector('.gallery-item');
+  back?.focus({ preventScroll: true });
+  lightboxTrigger = null;
 }
 
 /* -------------------------------------------------------------- event wiring */
@@ -726,18 +773,22 @@ root.addEventListener('click', (event) => {
   if (event.target.closest('[data-open-list]')) return openList();
   if (event.target.closest('[data-end]')) return requestClose();
 
-  /* The step buttons were rendered but never wired — clicking them did
-     nothing until this branch existed. */
+  /* Step buttons live here as well as on the bottom bar; both route through
+     step(), which is the only place the range is checked. */
   const stepper = event.target.closest('[data-step]');
   if (stepper) return step(Number(stepper.dataset.step));
 
   const shot = event.target.closest('[data-shot]');
-  if (shot) return openLightbox(Number(shot.dataset.shot));
+  if (shot) return openLightbox(Number(shot.dataset.shot), shot);
 
   const lb = event.target.closest('[data-lb]');
   if (lb) return openLightbox(state.lightbox + Number(lb.dataset.lb));
   if (event.target.closest('[data-lb-close]')) return closeLightbox();
-  if (event.target === root.querySelector('.lightbox')) return closeLightbox();
+  /* The bar and the stage fill the flex column, so the .lightbox element
+     itself never receives a click — the empty area to dismiss is the stage. */
+  if (event.target.closest('.lightbox') && event.target.classList.contains('lightbox-stage')) {
+    return closeLightbox();
+  }
 
   const opener = event.target.closest('[data-open]');
   if (!opener) return;
@@ -783,12 +834,13 @@ document.addEventListener('keydown', (event) => {
     return;
   }
 
-  /* Roving focus across the wall using the rendered column count. */
+  /* Roving focus, scoped to the grid the tile is in — otherwise ArrowDown on
+     the last index block walks into the records band. */
   const tile = event.target.closest?.('.tile');
   if (!tile || !event.key.startsWith('Arrow')) return;
-  const tiles = [...root.querySelectorAll('.grid .tile')];
-  const index = tiles.indexOf(tile);
   const grid = tile.parentElement;
+  const tiles = [...grid.querySelectorAll('.tile')];
+  const index = tiles.indexOf(tile);
   const columns = getComputedStyle(grid).gridTemplateColumns.split(' ').length || 1;
   const moves = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: columns, ArrowUp: -columns };
   const delta = moves[event.key];
@@ -819,9 +871,13 @@ renderChrome();
 applyHash();
 
 /* The dither is rasterised at a fixed low resolution, so it has to be redrawn
-   when the hero changes width. */
+   when the hero changes width. Crossing the 900px line also has to drop the
+   drawer: at desktop widths every way out of it (完成, backdrop, 全部方块) is
+   display:none, so an open list would leave the stage inert and the title-bar
+   controls dead until Escape. */
 let resizeTimer = null;
 window.addEventListener('resize', () => {
+  if (window.innerWidth >= 900 && document.body.dataset.list === 'open') closeList();
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(paintCloud, 180);
 });

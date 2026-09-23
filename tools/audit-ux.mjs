@@ -6,6 +6,7 @@
      node tools/audit-ux.mjs
 --------------------------------------------------------------------------- */
 import { spawn } from 'node:child_process';
+import { ensureServer } from './ensure-server.mjs';
 
 const CHROME =
   'C:/Users/24772/AppData/Local/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-win64/chrome-headless-shell.exe';
@@ -82,6 +83,7 @@ class CDP {
   }
 }
 
+await ensureServer();
 const browser = spawn(
   CHROME,
   [`--remote-debugging-port=${PORT}`, '--remote-allow-origins=*', '--no-sandbox', '--disable-gpu', '--window-size=1440,900', 'about:blank'],
@@ -364,9 +366,11 @@ for (const [label, w, h, mobile] of SIZES) {
   await sleep(900);
   const row = await cdp.eval(`(() => {
     const decorative = /tile-x|tile-plus/;
-    const shown = (el) => (el.checkVisibility
+    /* checkVisibility is the only predicate that is right for both fixed
+       elements (offsetParent is null) and hidden ones (offsetWidth is not). */
+    const shown = (el) => (typeof Element.prototype.checkVisibility === 'function'
       ? el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })
-      : Boolean(el.offsetWidth || el.offsetHeight)) && !el.closest('[inert]');
+      : false) && !el.closest('[inert]');
     const all = [...document.querySelectorAll('button, a')].filter(shown);
     const small = all.filter((el) => { const r = el.getBoundingClientRect(); return r.height < 44 && !decorative.test(el.className); });
     return {

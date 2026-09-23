@@ -8,6 +8,7 @@
      node tools/cdp-shoot.mjs
 --------------------------------------------------------------------------- */
 import { spawn } from 'node:child_process';
+import { ensureServer } from './ensure-server.mjs';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -251,6 +252,7 @@ const SCENARIOS = [
   },
 ];
 
+await ensureServer();
 const browser = spawn(
   CHROME,
   [

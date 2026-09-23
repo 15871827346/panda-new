@@ -5,14 +5,12 @@
      node tools/verify.mjs
 --------------------------------------------------------------------------- */
 import { spawn } from 'node:child_process';
+import { ensureServer } from './ensure-server.mjs';
 /* Imported so the assertions can be derived from the real block order instead
    of hard-coding titles that would go stale silently. */
 import { BLOCKS } from '../data.js';
 
 const nextOf = (id) => BLOCKS[BLOCKS.findIndex((b) => b.id === id) + 1]?.title.zh ?? null;
-const prevOf = (id) => BLOCKS[BLOCKS.findIndex((b) => b.id === id) - 1]?.title.zh ?? null;
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const CHROME =
   'C:/Users/24772/AppData/Local/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-win64/chrome-headless-shell.exe';
@@ -99,6 +97,7 @@ class CDP {
   }
 }
 
+await ensureServer();
 const browser = spawn(
   CHROME,
   [`--remote-debugging-port=${PORT}`, '--remote-allow-origins=*', '--no-sandbox', '--disable-gpu', '--window-size=1440,900', 'about:blank'],
@@ -425,12 +424,19 @@ const overlap = await cdp.evaluate(`(() => {
 })()`);
 record('吸底条不遮住最后一张图', overlap === null || overlap.gap >= -1, JSON.stringify(overlap));
 
-/* Target sweep — with a predicate that can actually see fixed elements. */
+/* Target sweep. The visibility predicate matters more than it looks:
+   offsetParent is null for fixed elements, and offsetWidth/offsetHeight are
+   non-zero for visibility:hidden ones — both produce a sweep that quietly
+   stops covering the drawer. So: require checkVisibility, and if it is ever
+   missing, fail loudly instead of falling back to a weaker guess. */
 const sweepTargets = `((() => {
   const decorative = /tile-x|tile-plus/;
-  const shown = (el) => (el.checkVisibility
-    ? el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true })
-    : Boolean(el.offsetWidth || el.offsetHeight)) && !el.closest('[inert]');
+  if (typeof Element.prototype.checkVisibility !== 'function') {
+    return ['NO-checkVisibility: 可见性判断不可用，本条检查无效'];
+  }
+  const shown = (el) => el.checkVisibility({
+      opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true,
+    }) && !el.closest('[inert]');
   return [...document.querySelectorAll('button, a')]
     .filter(shown)
     .map((el) => { const r = el.getBoundingClientRect(); return { what: el.className || el.tagName, w: Math.round(r.width), h: Math.round(r.height) }; })
@@ -447,7 +453,12 @@ await cdp.evaluate(`document.body.dataset.list !== 'open' || document.querySelec
 await sleep(500);
 
 /* Sanity: the sweep predicate is not silently matching nothing. */
-const sweepCount = await cdp.evaluate(`[...document.querySelectorAll('button, a')].filter((el) => el.checkVisibility ? el.checkVisibility({opacityProperty:true, visibilityProperty:true}) : true).length`);
+const sweepCount = await cdp.evaluate(`(() => {
+  if (typeof Element.prototype.checkVisibility !== 'function') return -1;
+  return [...document.querySelectorAll('button, a')]
+    .filter((el) => el.checkVisibility({ opacityProperty: true, visibilityProperty: true }))
+    .length;
+})()`);
 record('目标扫描确实覆盖到元素（非空判）', sweepCount > 15, `扫到 ${sweepCount} 个`);
 
 /* A8 — coarse-pointer sizing. Neither Emulation.setEmulatedMedia's `pointer`
@@ -479,7 +490,126 @@ const tapToken = await cdp.evaluate(`(() => {
 })()`);
 record('按钮尺寸统一走 --tap 变量，没有残留写死值', tapToken.usesVar === true && tapToken.hardCoded44 === 0, JSON.stringify(tapToken));
 
-/* 10. errors --------------------------------------------------------------- */
+/* 10. regressions found by the independent audit — each earns a test so it
+       cannot come back quietly. The suite passed 62/62 while every one of
+       these was live. */
+/* A short viewport on purpose: at 900px tall this sheet only scrolls ~126px,
+   less than the test scroll, which would make the check meaningless. */
+await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 600, deviceScaleFactor: 1, mobile: false });
+await cdp.send('Page.navigate', { url: `${BASE}#/b/record-001` });
+await sleep(2200);
+
+/* Desktop rail: `position: sticky` with no offset silently behaves as
+   relative, so assert it actually holds still — reading the computed
+   `position` string would have passed the broken version.
+   Sticky has a limited range, so test inside it: a modest scroll must leave
+   the rail exactly where it was. Under `inset: auto` it moved one-for-one. */
+const railStick = await cdp.evaluate(`(async () => {
+  const rail = document.querySelector('.rail');
+  const sheet = document.querySelector('.focus');
+  sheet.scrollTop = 0;
+  await new Promise((r) => setTimeout(r, 150));
+  const before = Math.round(rail.getBoundingClientRect().top);
+  sheet.scrollTop = 150;
+  await new Promise((r) => setTimeout(r, 250));
+  return {
+    before,
+    after: Math.round(rail.getBoundingClientRect().top),
+    scrolled: Math.round(sheet.scrollTop),
+  };
+})()`);
+record(
+  '桌面左栏真的吸得住（不是只写着 sticky）',
+  railStick.before === railStick.after && railStick.scrolled === 150,
+  `滚动 ${railStick.scrolled}px，左栏 top ${railStick.before} → ${railStick.after}`,
+);
+
+/* Stranded lightbox: Back used to null the state without removing the node,
+   leaving an opaque full-screen sheet nobody could dismiss. Run from a clean
+   page so history.back() is unambiguously the sheet's own entry. */
+await cdp.send('Page.navigate', { url: BASE });
+await sleep(1800);
+await cdp.evaluate(`document.querySelector('.tile[data-open="record-001"]').scrollIntoView({block:'center',behavior:'instant'})`);
+await sleep(400);
+await cdp.click('.tile[data-open="record-001"]');
+await sleep(1400);
+await cdp.evaluate('document.querySelector(".gallery-item").click()');
+await sleep(700);
+const lbOpen = await cdp.evaluate('!!document.querySelector(".lightbox")');
+await cdp.evaluate('history.back()');
+await sleep(1600);
+const stranded = await cdp.evaluate(`(() => {
+  const l = document.querySelector('.lightbox');
+  if (!l) return { present: false };
+  const cs = getComputedStyle(l);
+  return { present: true, covering: cs.position === 'fixed' && cs.display !== 'none' };
+})()`);
+const afterBack = await probe();
+record('大图开着时返回不会留下盖住页面的遮罩', lbOpen && !stranded.present, `大图曾打开=${lbOpen}，残留=${stranded.present}`);
+record('返回后回到方块墙', afterBack.mode === 'wall', `mode=${afterBack.mode}`);
+
+/* Deep link then close: the sheet must not navigate out of the site. */
+await cdp.send('Page.navigate', { url: `${BASE}#/b/hardware-mr` });
+await sleep(2000);
+const deepHistory = await cdp.evaluate('history.length');
+await cdp.click('.stage-bar [data-close]');
+await sleep(1400);
+const afterDeepClose = await cdp.evaluate(`({ mode: document.body.dataset.mode || 'wall', host: location.host })`);
+record('深链进入后点关闭留在本站', afterDeepClose.mode === 'wall' && afterDeepClose.host.includes('4321'), JSON.stringify(afterDeepClose));
+record('深链关闭不会消耗历史记录', (await cdp.evaluate('history.length')) === deepHistory, `${deepHistory} → ${await cdp.evaluate('history.length')}`);
+
+/* Lightbox overshoot: the raw index used to be stored, so wasted ArrowRight
+   presses had to be paid back one for one. */
+await cdp.send('Page.navigate', { url: `${BASE}#/b/record-002` });
+await sleep(2000);
+await cdp.evaluate('document.querySelector(".gallery-item").click()');
+await sleep(600);
+await cdp.key('ArrowRight', 'ArrowRight', 39);
+await cdp.key('ArrowRight', 'ArrowRight', 39);
+await cdp.key('ArrowRight', 'ArrowRight', 39);
+const atEnd = await cdp.evaluate('document.querySelector(".lightbox-bar .mono:nth-child(2)")?.textContent?.trim()');
+await cdp.key('ArrowLeft', 'ArrowLeft', 37);
+const afterLeft = await cdp.evaluate('document.querySelector(".lightbox-bar .mono:nth-child(2)")?.textContent?.trim()');
+record('大图按过头之后左键立刻有反应', atEnd === '02 / 02' && afterLeft === '01 / 02', `${atEnd} → ${afterLeft}`);
+await cdp.evaluate('document.querySelector("[data-lb-close]").click()');
+await sleep(500);
+
+/* busy must not latch: switch repeatedly and confirm the sheet still closes. */
+const busyLatch = await cdp.evaluate(`(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (let i = 0; i < 4; i += 1) {
+    document.querySelector('[data-next]').click();
+    await wait(250);
+  }
+  document.querySelector('.stage-bar [data-close]').click();
+  await wait(900);
+  return document.body.dataset.mode || 'wall';
+})()`);
+record('连续换块后仍能正常关闭（busy 未卡死）', busyLatch === 'wall', `mode=${busyLatch}`);
+
+/* Roving focus must not walk out of its own grid. The handler reads
+   event.target, so the key must be dispatched on the tile itself — firing it
+   at document would silently do nothing and pass for the wrong reason. */
+await cdp.send('Page.navigate', { url: BASE });
+await sleep(1800);
+const roving = await cdp.evaluate(`(async () => {
+  const first = document.querySelectorAll('.grid')[0];
+  const tiles = [...first.querySelectorAll('.tile')];
+  const last = tiles[tiles.length - 1];
+  last.focus();
+  await new Promise((r) => setTimeout(r, 60));
+  last.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  await new Promise((r) => setTimeout(r, 60));
+  const active = document.activeElement;
+  return {
+    moved: active !== last,
+    stayedInGrid: first.contains(active),
+    active: active?.dataset?.open ?? null,
+  };
+})()`);
+record('末块按方向键不会跳进下一段', roving.stayedInGrid === true, JSON.stringify(roving));
+
+/* 11. errors --------------------------------------------------------------- */
 record('全程无 console 报错/异常', cdp.consoleErrors.length === 0, cdp.consoleErrors.slice(0, 3).join(' | '));
 
 const failed = checks.filter((check) => !check.pass);

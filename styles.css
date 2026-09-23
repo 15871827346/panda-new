@@ -2,9 +2,14 @@
    Panda Studio — block index, typesafe.ai treatment, monochrome.
 
    The structure is typesafe's — Win95 windows, hard rules, corner marks,
-   giant tight display type — but the colour fields were taken out at the
-   client's request. Everything now sits on white; the only tones are paper
-   #fefefe, window grey #dedede and ink #1e1e1e.
+   giant tight display type — but the colour fields were taken out on request.
+   Everything sits on white; the only tones are paper #fefefe, window grey
+   #dedede and ink #1e1e1e, so hierarchy comes from rules, fills and type size
+   rather than hue.
+
+   Fonts are Arial for Latin and a heiti for Chinese, with no monospace
+   anywhere: a mono Chinese run reads as a row of awkward half-width boxes.
+   Label hierarchy comes from size and tracking instead.
 --------------------------------------------------------------------------- */
 
 :root {
@@ -20,12 +25,11 @@
   --bw: 1.5px;
   --bar: 34px;
   --shadow: 5px 5px 0 var(--ink);
-  --speed: 460ms;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
-  /* Smallest comfortable tap target. Raised to 44px wherever the input is a
-     finger — see the (pointer: coarse) rule below, which keys off input type
-     rather than screen width so tablets are covered too. */
+  /* Smallest comfortable tap target. Raised to 44px for a coarse pointer, and
+     also under 900px so a narrow window on a desktop gets the larger targets
+     too — see the media rule further down that sets it. */
   --tap: 28px;
   --sheet-bar: 54px;
 
@@ -295,10 +299,6 @@ ol {
 }
 
 /* -------------------------------------------------------------------- walls */
-
-.wall {
-  transition: opacity 200ms var(--ease);
-}
 
 /* Opening a block does not replace the page — the sheet covers the wall and
    scrolls on its own, so the reader's position is never lost and there is no
@@ -642,8 +642,8 @@ body[data-list='open'] .list-backdrop {
 
 /* ------------------------------------------------------- thumb-zone bar */
 
-/* Sticky rather than fixed: .focus is the scroll container and carries an
-   entrance transform, and a transform re-anchors fixed descendants. */
+/* Sticky, not fixed: .focus is the scroll container, and a sticky element
+   pins to the box that actually scrolls. */
 .sheet-bar {
   position: sticky;
   bottom: 0;
@@ -681,6 +681,14 @@ body[data-list='open'] .list-backdrop {
 
 .bar-prev {
   flex: none;
+}
+
+/* Placeholder for "there is no previous block" — visibly inert, not a button
+   that looks pressable and silently does nothing. */
+.bar-prev--off {
+  border-color: var(--panel);
+  color: var(--ink-faint);
+  background: transparent;
 }
 
 .bar-prev span:first-child {
@@ -764,8 +772,8 @@ body[data-list='open'] .list-backdrop {
   text-overflow: ellipsis;
 }
 
-/* Splits the 16 rail entries into 索引 / 作品 so the column reads as two
-   bands instead of one long list. */
+/* Bands the list into its four groups — 认识 Panda / 我们的设备 / 选择方向 /
+   作品档案 — so a sixteen-entry column or drawer reads as four short ones. */
 .rail-rule {
   flex: none;
   grid-column: 1 / -1;
@@ -820,11 +828,6 @@ body[data-list='open'] .list-backdrop {
 
 .ghost:hover {
   opacity: 1;
-}
-
-.ghost:disabled {
-  opacity: 0.28;
-  cursor: default;
 }
 
 .stage-nav {
@@ -1175,7 +1178,13 @@ body[data-list='open'] .list-backdrop {
 
   .rail {
     position: sticky;
-    inset: auto;
+    /* sticky needs an explicit offset — `inset: auto` leaves it with nothing
+       to stick to, and it silently behaves as relative. Verified by mutation:
+       with `inset: auto` a 150px scroll moves the rail a full 150px. */
+    top: 0;
+    right: auto;
+    bottom: auto;
+    left: auto;
     grid-column: 1;
     grid-row: 1;
     display: flex;
@@ -1247,9 +1256,9 @@ a {
 
 /* The negative tracking and sub-1 line-heights used above are Latin display
    settings. Full-width Hanzi need neither: negative tracking makes adjacent
-   glyphs touch, and a line-height below 1 makes a two-line Chinese heading
-   collide. The hero slogan and the footer wordmark are Latin in both locales,
-   so they keep their tight display settings. */
+   glyphs touch, and a line-height under 1 makes a two-line Chinese heading
+   collide. The hero slogan and the footer wordmark are Latin, so they keep
+   their tight display settings. */
 html[lang="zh-CN"] .section-head h2,
 html[lang="zh-CN"] .stage-title {
   line-height: 1.24;
@@ -1280,12 +1289,5 @@ html[lang="zh-CN"] .tile-summary {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
-  }
-
-  /* The drawer still has to arrive and leave; only the slide is dropped. */
-  .rail,
-  .sheet-bar,
-  .focus {
-    scroll-behavior: auto;
   }
 }

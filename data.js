@@ -9,7 +9,6 @@
 
 export const SITE = {
   zh: {
-    langLabel: '中',
     eyebrow: 'PANDA 社团 · 在这里，把想法做出来',
     title: ['with AI, anything'],
     description:
@@ -38,11 +37,9 @@ export const SITE = {
       open: '展开',
       blockUnit: '块',
       /* Bottom bar on phones: name where each button goes, never just an arrow. */
-      prevWord: '上一篇',
       nextWord: '下一篇',
       listAll: '全部方块',
       listClose: '完成',
-      listLabel: '全部方块',
       prevTo: (title) => `上一个方块 · ${title}`,
       nextTo: (title) => `下一个方块 · ${title}`,
       backToWallShort: '回到方块墙',
@@ -61,7 +58,6 @@ export const SITE = {
     footer: { tagline: 'with AI, anything', backToTop: '返回顶部' },
   },
   en: {
-    langLabel: 'EN',
     eyebrow: 'Independent creative studio · Est. somewhere underground',
     title: ['with AI, anything'],
     description:
@@ -89,11 +85,9 @@ export const SITE = {
       back: 'Back to block wall',
       open: 'Open',
       blockUnit: 'blocks',
-      prevWord: 'Previous',
       nextWord: 'Next',
       listAll: 'All blocks',
       listClose: 'Done',
-      listLabel: 'All blocks',
       prevTo: (title) => `Previous block · ${title}`,
       nextTo: (title) => `Next block · ${title}`,
       backToWallShort: 'Back to wall',

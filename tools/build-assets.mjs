@@ -35,7 +35,7 @@ const SOURCES = {
   'hw-arm': 'robot-arm-workshop.jpg',
   'hw-arm-2': 'robot-arm-detail.jpg',
   're-hardware': '3D printing results.jpeg',
-  're-game': 'sticker.png',
+  're-game': 'sticker.jpg',
   're-campus': 'Studio Environment 2.jpeg',
   're-arm': 'robot-arm-detail.jpg',
   // --- record blocks ------------------------------------------------------
@@ -76,7 +76,6 @@ const SOURCES = {
   'r007-1': 'mini-hbut-home.jpg',
   // --- brand --------------------------------------------------------------
   'brand-icon': '__brand__/icon.png',
-  'brand-typo': '__brand__/typo.png',
 };
 
 await mkdir(OUT, { recursive: true });
